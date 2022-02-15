@@ -1,18 +1,14 @@
-using Chemistry;
 using EngineLayer;
 using MassSpectrometry;
 using NUnit.Framework;
 using Proteomics;
 using Proteomics.Fragmentation;
 using Proteomics.ProteolyticDigestion;
-using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using UsefulProteomicsDatabases;
 using MzLibUtil;
 using EngineLayer.GlycoSearch;
-using MathNet.Numerics.LinearRegression;
 using IO.Mgf;
 
 namespace PTMLocalizationTest

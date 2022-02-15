@@ -2,9 +2,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using Proteomics.Fragmentation;
-using Proteomics.ProteolyticDigestion;
-using Proteomics;
 using MzLibUtil;
+
 
 namespace EngineLayer.GlycoSearch
 {
