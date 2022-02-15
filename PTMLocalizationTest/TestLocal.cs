@@ -20,7 +20,6 @@ namespace PTMLocalizationTest
     [TestFixture]
     public class Tests
     {
-        private static GlycanBox[] OGlycanBoxes { get; set; }
 
         [OneTimeSetUp]
         public static void Setup()
@@ -28,8 +27,9 @@ namespace PTMLocalizationTest
             GlobalVariables.SetUpGlobalVariables();
             GlycanBox.GlobalOGlycans = GlycanDatabase.LoadGlycan(GlobalVariables.OGlycanLocations.Where(p => p.Contains("OGlycan.gdb")).First(), true, true).ToArray();
             GlycanBox.GlobalOGlycanMods = GlycanBox.BuildGlobalOGlycanMods(GlycanBox.GlobalOGlycans).ToArray();
-            OGlycanBoxes = GlycanBox.BuildGlycanBoxes(3, GlycanBox.GlobalOGlycans, GlycanBox.GlobalOGlycanMods).OrderBy(p => p.Mass).ToArray();
+            GlycanBox.OGlycanBoxes = GlycanBox.BuildGlycanBoxes(3, GlycanBox.GlobalOGlycans, GlycanBox.GlobalOGlycanMods).OrderBy(p => p.Mass).ToArray();
         }
+
 
         [Test]
         public static void OGlycoTest_LocalizeMod()
@@ -37,7 +37,8 @@ namespace PTMLocalizationTest
             //This test proves that the LocalizeMod method is the same as LocalizeOGlycan. 
 
             //Get glycanBox
-            var glycanBox = OGlycanBoxes[19];
+            var boxId = 19;
+            var glycanBox = GlycanBox.OGlycanBoxes[boxId];
 
             //Get unmodified peptide, products, allPossible modPos and all boxes.
             Protein prot = new Protein(sequence: "TTGSLEPSSGASGPQVSSVK", accession: "", isDecoy: false);
@@ -82,10 +83,9 @@ namespace PTMLocalizationTest
 
             //Graph Localization
             var boxMotifs = new string[] { "S/T", "S/T", "S/T", "S/T", "S/T", "S/T", "S/T", "S/T" };
-            LocalizationGraph localizationGraph = new LocalizationGraph(modPos, boxMotifs, glycanBox, boxes, -1);
 
             //LocalizeMod
-            LocalizationGraph localizationGraph0 = new LocalizationGraph(modPos, boxMotifs, glycanBox, boxes, -1);
+            LocalizationGraph localizationGraph0 = new LocalizationGraph(modPos, boxMotifs, glycanBox, boxes, boxId);
             //LocalizationGraph.LocalizeMod(localizationGraph0, scans.First(), commonParameters.ProductMassTolerance, 
             //    products.Where(v => v.ProductType == ProductType.c || v.ProductType == ProductType.zDot).ToList(),
             //    GlycoPeptides.GetLocalFragment, GlycoPeptides.GetUnlocalFragment);
@@ -98,6 +98,13 @@ namespace PTMLocalizationTest
 
             Assert.That(27.097639419729177 < localizationGraph0.TotalScore + 0.00001 && 27.097639419729177 > localizationGraph0.TotalScore - 0.00001);
 
+
+            var gsm = new GlycoSpectralMatch(new List<LocalizationGraph> { localizationGraph0 }, GlycoType.OGlycoPep);
+            gsm.ScanInfo_p= scan.TheScan.MassSpectrum.Size * ProductMassTolerance.GetRange(1000).Width / scan.TheScan.MassSpectrum.Range.Width;
+            gsm.Thero_n = products.Count();
+            GlycoSite.GlycoLocalizationCalculation(gsm, gsm.GlycanType, DissociationType.HCD, DissociationType.EThcD);
+
+            var output = gsm.WriteLine(null);
         }
     }
 }

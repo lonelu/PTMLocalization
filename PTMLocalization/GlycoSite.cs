@@ -80,11 +80,11 @@ namespace EngineLayer.GlycoSearch
         }
 
         //Glyco Localization
-        public static void GlycoLocalizationCalculation(GlycoSpectralMatch gsm, List<LocalizationGraph> LocalizationGraphs, GlycoType GlycoType, 
+        public static void GlycoLocalizationCalculation(GlycoSpectralMatch gsm, GlycoType GlycoType, 
             DissociationType DissociationType, DissociationType MS2ChildScanDissociationType)
         {
 
-            if (LocalizationGraphs != null)
+            if (gsm.LocalizationGraphs != null)
             {
                 //TO DO: The is_HCD_only_data is not totally correct. 
                 if (GlycoType == GlycoType.OGlycoPep &&
@@ -92,7 +92,7 @@ namespace EngineLayer.GlycoSearch
                     !GlycoPeptides.DissociationTypeContainETD(MS2ChildScanDissociationType))
                 {
                     gsm.LocalizationLevel = LocalizationLevel.Level3;
-                    if (LocalizationGraphs.Count == 1 && LocalizationGraphs.First().ModPos.Length == 1)
+                    if (gsm.LocalizationGraphs.Count == 1 && gsm.LocalizationGraphs.First().ModPos.Length == 1)
                     {
                         gsm.LocalizationLevel = LocalizationLevel.Level1b;
                     }
@@ -102,14 +102,14 @@ namespace EngineLayer.GlycoSearch
                 {
                     List<Route> localizationCandidates = new List<Route>();
 
-                    for (int i = 0; i < LocalizationGraphs.Count; i++)
+                    for (int i = 0; i < gsm.LocalizationGraphs.Count; i++)
                     {
-                        var allPathWithMaxScore = LocalizationGraph.GetAllHighestScorePaths(LocalizationGraphs[i].array, LocalizationGraphs[i].ChildModBoxes);
+                        var allPathWithMaxScore = LocalizationGraph.GetAllHighestScorePaths(gsm.LocalizationGraphs[i].array, gsm.LocalizationGraphs[i].ChildModBoxes);
 
                         foreach (var path in allPathWithMaxScore)
                         {
-                            var local = LocalizationGraph.GetLocalizedPath(LocalizationGraphs[i], path);
-                            local.ModBoxId = LocalizationGraphs[i].ModBoxId;
+                            var local = LocalizationGraph.GetLocalizedPath(gsm.LocalizationGraphs[i], path);
+                            local.ModBoxId = gsm.LocalizationGraphs[i].ModBoxId;
                             localizationCandidates.Add(local);
                         }
                     }
@@ -128,7 +128,7 @@ namespace EngineLayer.GlycoSearch
                 if (localLevel == LocalizationLevel.Level1 || localLevel == LocalizationLevel.Level2)
                 {
                     List<Route> allRoutes = new List<Route>();
-                    foreach (var graph in LocalizationGraphs)
+                    foreach (var graph in gsm.LocalizationGraphs)
                     {
                         allRoutes.AddRange(LocalizationGraph.GetAllPaths_CalP(graph, gsm.ScanInfo_p, gsm.Thero_n));
                     }

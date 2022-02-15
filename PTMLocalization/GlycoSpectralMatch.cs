@@ -10,9 +10,10 @@ namespace EngineLayer.GlycoSearch
 {
     public class GlycoSpectralMatch
     {
-        public GlycoSpectralMatch()
+        public GlycoSpectralMatch(List<LocalizationGraph> localizationGraphs, GlycoType glycoType)
         {
-
+            LocalizationGraphs = localizationGraphs;
+            GlycanType = glycoType;
         }
 
         #region Proterties
@@ -69,13 +70,13 @@ namespace EngineLayer.GlycoSearch
         }
 
         //Glycan type indicator
-        public GlycoType GlycanType { get; set; } 
+        public GlycoType GlycanType { get; } 
 
         public bool NGlycanMotifExist { get; set; } //NGlycan Motif exist. 
 
 
         //Glyco Info
-        public List<LocalizationGraph> LocalizationGraphs { get; set; }  //Graph-based Localization information.
+        public List<LocalizationGraph> LocalizationGraphs { get; }  //Graph-based Localization information.
         public List<Route> Routes { get; set; } //Localized modification sites and modfication ID.
 
         public double ScanInfo_p { get; set; }  //Scan P value, Used for Localization probability calculation. Ref PhosphoRS paper.
@@ -167,5 +168,70 @@ namespace EngineLayer.GlycoSearch
         }
 
         #endregion
+
+        public string WriteLine(int? OneBasedStartResidueInProtein)
+        {
+            var sb = new StringBuilder();
+            if (LocalizationGraphs != null)
+            {
+                sb.Append(LocalizationGraphs.First().TotalScore + "\t");
+
+                var glycanBox = GetFirstGraphGlycanBox(this);
+
+                sb.Append(glycanBox.ModCount + "\t");
+
+                sb.Append(LocalizationGraphs.First().ModPos.Length + "\t");
+
+                sb.Append(glycanBox.Mass + "\t");
+
+                sb.Append(Glycan.GetKindString(glycanBox.Kind)); sb.Append("\t");
+
+                //Get glycans
+                var glycans = GetFirstGraphGlycans(this, glycanBox);
+
+                //if (glycans.First().Struc!=null)
+                //{
+                //    sb.Append(string.Join(",", glycans.Select(p => p.Struc.ToString()).ToArray())); 
+                //}
+                sb.Append(string.Join(",", glycans.Select(p => p.Composition).ToArray()));
+                sb.Append("\t");
+
+                if (Routes != null)
+                {
+                    sb.Append(LocalizationLevel); sb.Append("\t");
+
+                    string local_peptide = "";
+                    string local_protein = "";
+                    if (GlycanType == GlycoType.OGlycoPep)
+                    {
+                        LocalizedSiteSpeciLocalInfo(SiteSpeciLocalProb, LocalizedGlycan, OneBasedStartResidueInProtein, GlycanBox.GlobalOGlycans, ref local_peptide, ref local_protein);
+                    }
+                    else if (GlycanType == GlycoType.NGlycoPep)
+                    {
+                        LocalizedSiteSpeciLocalInfo(SiteSpeciLocalProb, LocalizedGlycan, OneBasedStartResidueInProtein, GlycanBox.GlobalNGlycans, ref local_peptide, ref local_protein);
+                    }
+                    else
+                    {
+                        LocalizedSiteSpeciLocalInfo(SiteSpeciLocalProb, LocalizedGlycan, OneBasedStartResidueInProtein, GlycanBox.GlobalMixedGlycans, ref local_peptide, ref local_protein);
+                    }
+
+                    sb.Append(local_peptide); sb.Append("\t");
+                    sb.Append(local_protein); sb.Append("\t");
+
+                    sb.Append(AllLocalizationInfo(Routes)); sb.Append("\t");
+
+                    sb.Append(SiteSpeciLocalInfo(SiteSpeciLocalProb)); sb.Append("\t");
+                }
+                else
+                {
+                    sb.Append(LocalizationLevel); sb.Append("\t");
+                    sb.Append("\t");
+                    sb.Append("\t");
+                    sb.Append("\t");
+                    sb.Append("\t");
+                }
+            }
+            return sb.ToString();
+        }
     }
 }
