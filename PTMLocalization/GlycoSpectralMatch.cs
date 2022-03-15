@@ -12,6 +12,11 @@ namespace EngineLayer.GlycoSearch
             LocalizationGraphs = localizationGraphs;
             GlycanType = glycoType;
         }
+        // placeholder
+        public GlycoSpectralMatch()
+        {
+
+        }
 
         #region Proterties
 
