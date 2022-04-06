@@ -75,7 +75,53 @@ namespace EngineLayer.GlycoSearch
             return false;
         }
 
+        public static void GetModPosMotif(GlycoType glycoType, int[] n_modPos, int[] o_modPos, out int[] modPos, out string[] modMotifs)
+        {
+            int ip = 0;
+            if (glycoType == GlycoType.OGlycoPep)
+            {
+                modPos = o_modPos;
+                modMotifs = new string[o_modPos.Length];
 
+                foreach (var o in o_modPos)
+                {
+                    modPos[ip] = o;
+                    modMotifs[ip] = "S/T";
+                    ip++;
+                }
+            }
+            else if (glycoType == GlycoType.NGlycoPep)
+            {
+                modPos = n_modPos;
+                modMotifs = new string[n_modPos.Length];
+
+                foreach (var n in n_modPos)
+                {
+                    modPos[ip] = n;
+                    modMotifs[ip] = "Nxs/t";
+                    ip++;
+                }
+            }
+            else
+            {
+                modPos = new int[n_modPos.Length + o_modPos.Length];
+                modMotifs = new string[n_modPos.Length + o_modPos.Length];
+                foreach (var n in n_modPos)
+                {
+                    modPos[ip] = n;
+                    modMotifs[ip] = "Nxs/t";
+                    ip++;
+                }
+
+                foreach (var o in o_modPos)
+                {
+                    modPos[ip] = o;
+                    modMotifs[ip] = "S/T";
+                    ip++;
+                }
+                Array.Sort(modPos, modMotifs);
+            }
+        }
         //The oxoniumIonIntensities is related with Glycan.AllOxoniumIons. 
         //Rules are coded in the function.    
         public static bool OxoniumIonsAnalysis(double[] oxoniumIonsintensities, GlycanBox glycanBox)

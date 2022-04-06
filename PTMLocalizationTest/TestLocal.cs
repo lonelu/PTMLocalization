@@ -43,8 +43,6 @@ namespace PTMLocalizationTest
             List<Product> products = new List<Product>();
             peptide.Fragment(DissociationType.ETD, FragmentationTerminus.Both, products);
 
-
-
             int[] modPos = GlycoPeptides.GetPossibleModSites(peptide, new string[] { "S", "T" }).OrderBy(v => v).ToArray();
             var boxes = GlycanBox.BuildChildGlycanBoxes(glycanBox.ModIds, GlycanBox.GlobalOGlycans, GlycanBox.GlobalOGlycanMods).ToArray();
             Assert.That(boxes.Count() == 6);
@@ -62,7 +60,7 @@ namespace PTMLocalizationTest
 
             var msNScans = myMSDataFile.GetAllScansList().Where(x => x.MsnOrder > 1).ToArray();
             var ms2Scan = msNScans.Where(p => p.MsnOrder == 2).ToArray()[0];
- 
+
 
             double precursorMZ = ms2Scan.SelectedIonMonoisotopicGuessMz.Value;
             //double precursorMZ = ms2Scan.SelectedIonMZ.Value;
@@ -70,7 +68,7 @@ namespace PTMLocalizationTest
 
             IsotopicEnvelope[] neutralExperimentalFragments = Ms2ScanWithSpecificMass.GetNeutralExperimentalFragments(ms2Scan, 4, 3);
             var scan = new Ms2ScanWithSpecificMass(ms2Scan, precursorMZ, precursorCharge, spectraFile, 4, 3, neutralExperimentalFragments);
-    
+
             ////Known peptideWithMod match.
             //var peptideWithMod = GlycoPeptides.GlyGetTheoreticalPeptide(new int[3] { 10, 2, 3 }, peptide, glycanBox, GlycanBox.GlobalOGlycanMods);
             //Assert.That(peptideWithMod.FullSequence == "T[O-Glycosylation:H1N1 on X]T[O-Glycosylation:H1N1 on X]GSLEPSS[O-Glycosylation:N1 on X]GASGPQVSSVK");
@@ -96,7 +94,76 @@ namespace PTMLocalizationTest
 
 
             var gsm = new GlycoSpectralMatch(new List<LocalizationGraph> { localizationGraph0 }, GlycoType.OGlycoPep);
-            gsm.ScanInfo_p= scan.TheScan.MassSpectrum.Size * ProductMassTolerance.GetRange(1000).Width / scan.TheScan.MassSpectrum.Range.Width;
+            gsm.ScanInfo_p = scan.TheScan.MassSpectrum.Size * ProductMassTolerance.GetRange(1000).Width / scan.TheScan.MassSpectrum.Range.Width;
+            gsm.Thero_n = products.Count();
+            GlycoSite.GlycoLocalizationCalculation(gsm, gsm.GlycanType, DissociationType.HCD, DissociationType.EThcD);
+
+            var output = gsm.WriteLine(null);
+        }
+
+
+        [Test]
+        public static void OGlycoTest_LocalizeMod2()
+        {
+            //In this test, the peptide contain Common mod.
+
+            //Get unmodified peptide, products, allPossible modPos.
+
+            ModificationMotif.TryGetMotif("C", out ModificationMotif motif2);
+            Modification mod = new Modification(_originalId: "Deamidation on N", _modificationType: "Common Artifact", _target: motif2, _locationRestriction: "Anywhere.", _monoisotopicMass: 0.984016);
+
+            PeptideWithSetModifications peptide = new PeptideWithSetModifications("STN[Common Artifact:Deamidation on N]ASTVPFR",
+                new Dictionary<string, Modification> { { "Deamidation on N", mod } });
+
+            List<Product> products = new List<Product>();
+            peptide.Fragment(DissociationType.ETD, FragmentationTerminus.Both, products);
+
+            int[] modPos = GlycoPeptides.GetPossibleModSites(peptide, new string[] { "S", "T" }).OrderBy(v => v).ToArray();
+
+            //Get scan
+            Tolerance PrecursorTolerance = new PpmTolerance(10);
+            Tolerance ProductMassTolerance = new PpmTolerance(20);
+
+            string spectraFile = Path.Combine(TestContext.CurrentContext.TestDirectory, @"GlycoTestData\2019_09_16_StcEmix_35trig_EThcD25_rep1_5467.mgf"); //The Scans in the file are a pair.
+            FilteringParams filter = new FilteringParams();
+            var myMSDataFile = Mgf.LoadAllStaticData(spectraFile, filter);
+
+            var msNScans = myMSDataFile.GetAllScansList().Where(x => x.MsnOrder > 1).ToArray();
+            var ms2Scan = msNScans.Where(p => p.MsnOrder == 2).ToArray()[1];
+
+            double precursorMZ = ms2Scan.SelectedIonMonoisotopicGuessMz.Value;
+            //double precursorMZ = ms2Scan.SelectedIonMZ.Value;
+            int precursorCharge = ms2Scan.SelectedIonChargeStateGuess.Value;
+
+            IsotopicEnvelope[] neutralExperimentalFragments = Ms2ScanWithSpecificMass.GetNeutralExperimentalFragments(ms2Scan, 4, 3);
+            var scan = new Ms2ScanWithSpecificMass(ms2Scan, precursorMZ, precursorCharge, spectraFile, 4, 3, neutralExperimentalFragments);
+
+
+            List<int> n_modPos = new List<int>();
+            //var n_modPos = GlycoPeptides.GetPossibleModSites(peptide, new string[] { "Nxt", "Nxs" }).OrderBy(p => p).ToList();
+            var o_modPos = GlycoPeptides.GetPossibleModSites(peptide, new string[] { "S", "T" }).OrderBy(p => p).ToList();
+
+            int[] _modPos;
+            string[] modMotifs;
+            GlycoPeptides.GetModPosMotif(GlycoType.OGlycoPep, n_modPos.ToArray(), o_modPos.ToArray(), out _modPos, out modMotifs);
+
+            var possibleGlycanMassLow = PrecursorTolerance.GetMinimumValue(scan.PrecursorMass) - peptide.MonoisotopicMass;
+            var possibleGlycanMassHigh = PrecursorTolerance.GetMaximumValue(scan.PrecursorMass) - peptide.MonoisotopicMass;
+            int iDLow = GlycoPeptides.BinarySearchGetIndex(GlycanBox.OGlycanBoxes.Select(p => p.Mass).ToArray(), possibleGlycanMassLow);
+
+            List<LocalizationGraph> graphs = new List<LocalizationGraph>();
+            while (iDLow < GlycanBox.OGlycanBoxes.Length && GlycanBox.OGlycanBoxes[iDLow].Mass <= possibleGlycanMassHigh)
+            {
+                LocalizationGraph localizationGraph = new LocalizationGraph(_modPos, modMotifs, GlycanBox.OGlycanBoxes[iDLow], GlycanBox.OGlycanBoxes[iDLow].ChildGlycanBoxes, iDLow);
+                LocalizationGraph.LocalizeMod(localizationGraph, scan, ProductMassTolerance,
+                    products.Where(v => v.ProductType == ProductType.c || v.ProductType == ProductType.zDot).ToList(),
+                    GlycoPeptides.GetLocalFragmentGlycan, GlycoPeptides.GetUnlocalFragmentGlycan);
+                graphs.Add(localizationGraph);
+                iDLow++;
+            }
+            var best_graph = graphs.OrderByDescending(p => p.TotalScore).First();
+            var gsm = new GlycoSpectralMatch(new List<LocalizationGraph> { best_graph }, GlycoType.OGlycoPep);
+            gsm.ScanInfo_p = scan.TheScan.MassSpectrum.Size * ProductMassTolerance.GetRange(1000).Width / scan.TheScan.MassSpectrum.Range.Width;
             gsm.Thero_n = products.Count();
             GlycoSite.GlycoLocalizationCalculation(gsm, gsm.GlycanType, DissociationType.HCD, DissociationType.EThcD);
 
