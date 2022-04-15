@@ -11,6 +11,8 @@ using MzLibUtil;
 using EngineLayer.GlycoSearch;
 using IO.Mgf;
 using System.Diagnostics;
+using PTMLocalization;
+using System;
 
 namespace PTMLocalizationTest
 {
@@ -169,6 +171,111 @@ namespace PTMLocalizationTest
             GlycoSite.GlycoLocalizationCalculation(gsm, gsm.GlycanType, DissociationType.HCD, DissociationType.EThcD);
 
             var output = gsm.WriteLine(null);
+        }
+
+        /**
+         * Single scan O-glycan localization, given a peptide and glycan mass from MSFragger search
+         */
+        public static string LocalizeOGlyc(Ms2ScanWithSpecificMass ms2Scan, PeptideWithSetModifications peptide, double glycanDeltaMass, Tolerance precursorMassTolerance, Tolerance productMassTolerance)
+        {
+            // generate peptide fragments
+            List<Product> products = new List<Product>();
+            peptide.Fragment(DissociationType.ETD, FragmentationTerminus.Both, products);
+
+            // generate glycan modification sites
+            //int[] modPos = GlycoPeptides.GetPossibleModSites(peptide, new string[] { "S", "T" }).OrderBy(v => v).ToArray();
+            List<int> n_modPos = new List<int>();
+            var o_modPos = GlycoPeptides.GetPossibleModSites(peptide, new string[] { "S", "T" }).OrderBy(p => p).ToList();
+
+            int[] _modPos;
+            string[] modMotifs;
+            GlycoPeptides.GetModPosMotif(GlycoType.OGlycoPep, n_modPos.ToArray(), o_modPos.ToArray(), out _modPos, out modMotifs);
+
+            // Get possible O-glycan boxes from delta mass
+            // TODO: allow isotope errors?
+            var possibleGlycanMassLow = precursorMassTolerance.GetMinimumValue(glycanDeltaMass);
+            var possibleGlycanMassHigh = precursorMassTolerance.GetMaximumValue(glycanDeltaMass);
+            int iDLow = GlycoPeptides.BinarySearchGetIndex(GlycanBox.OGlycanBoxes.Select(p => p.Mass).ToArray(), possibleGlycanMassLow);
+
+            List<LocalizationGraph> graphs = new List<LocalizationGraph>();
+            while (iDLow < GlycanBox.OGlycanBoxes.Length && GlycanBox.OGlycanBoxes[iDLow].Mass <= possibleGlycanMassHigh)
+            {
+                LocalizationGraph localizationGraph = new LocalizationGraph(_modPos, modMotifs, GlycanBox.OGlycanBoxes[iDLow], GlycanBox.OGlycanBoxes[iDLow].ChildGlycanBoxes, iDLow);
+                LocalizationGraph.LocalizeMod(localizationGraph, ms2Scan, productMassTolerance,
+                    products.Where(v => v.ProductType == ProductType.c || v.ProductType == ProductType.zDot).ToList(),
+                    GlycoPeptides.GetLocalFragmentGlycan, GlycoPeptides.GetUnlocalFragmentGlycan);
+                graphs.Add(localizationGraph);
+                iDLow++;
+            }
+            var best_graph = graphs.OrderByDescending(p => p.TotalScore).First();
+            var gsm = new GlycoSpectralMatch(new List<LocalizationGraph> { best_graph }, GlycoType.OGlycoPep);
+            gsm.ScanInfo_p = ms2Scan.TheScan.MassSpectrum.Size * productMassTolerance.GetRange(1000).Width / ms2Scan.TheScan.MassSpectrum.Range.Width;
+            gsm.Thero_n = products.Count();
+            GlycoSite.GlycoLocalizationCalculation(gsm, gsm.GlycanType, DissociationType.HCD, DissociationType.EThcD);
+
+            return gsm.WriteLine(null);
+        }
+
+        [Test]
+        public static void OGlycoTest_FragPipe_FullRun()
+        {
+            // load test parameters, spectrum files, and MSFragger PSM table
+            Tolerance ProductMassTolerance = new PpmTolerance(10);
+            Tolerance PrecursorMassTolerance = new PpmTolerance(20);
+            
+            //string spectraFile = Path.Combine(TestContext.CurrentContext.TestDirectory, @"GlycoTestData\2019_09_16_StcEmix_35trig_EThcD25_rep1_calibrated.mgf");
+
+            string psmFile = Path.Combine(TestContext.CurrentContext.TestDirectory, @"GlycoTestData\psm.tsv");
+
+            // read PSM table to prepare to pass scans to localizer
+            PSMTableMSFragger PSMtable = new(psmFile);
+            string currentRawfile = "";
+            MsDataFile currentMsDataFile;
+            MsDataScan[] msScans = Array.Empty<MsDataScan>();
+            
+            foreach (string PSMline in PSMtable.PSMdata)
+            {
+                string[] lineSplits = PSMline.Split("\t");
+                //PSM psm = new(PSMline, PSMtable.Headers);
+                string spectrumString = lineSplits[PSMtable.SpectrumCol];
+                string peptide = lineSplits[PSMtable.PeptideCol];
+                double deltaMass = Double.Parse(lineSplits[PSMtable.DeltaMassCol]);
+                string assignedMods = lineSplits[PSMtable.AssignedModCol];
+                double precursorMZ = Double.Parse(lineSplits[PSMtable.PrecursorMZCol]);
+
+                int scanNum = PSMTableMSFragger.GetScanNum(spectrumString);
+                string rawfileName = PSMTableMSFragger.GetRawFile(spectrumString);
+                int precursorCharge = PSMTableMSFragger.GetScanCharge(spectrumString);
+
+                if (!rawfileName.Equals(currentRawfile))
+                {
+                    // new rawfile: load scan data
+                    string spectraFile = Path.Combine(TestContext.CurrentContext.TestDirectory, rawfileName);
+                    FilteringParams filter = new FilteringParams();
+                    currentMsDataFile = Mgf.LoadAllStaticData(spectraFile, filter);
+                    msScans = currentMsDataFile.GetAllScansList().ToArray();
+                    currentRawfile = rawfileName;
+                }
+
+                // retrieve the right scan
+                // TODO: find child scan
+                int childScanNum = scanNum + 3;     // NOTE: not correct in many cases
+                var ms2Scan = msScans[childScanNum];    // Note: this was originally MS2 scans only, changed to all scans to (hopefully) preserve original scan indices: needs testing
+
+                IsotopicEnvelope[] neutralExperimentalFragments = Ms2ScanWithSpecificMass.GetNeutralExperimentalFragments(ms2Scan, 4, 3);
+                var scan = new Ms2ScanWithSpecificMass(ms2Scan, precursorMZ, precursorCharge, currentRawfile, 4, 3, neutralExperimentalFragments);
+
+                // initialize peptide with all non-glyco mods
+                // TODO
+                //ModificationMotif.TryGetMotif("C", out ModificationMotif motif2);
+                //Modification mod = new Modification(_originalId: "Deamidation on N", _modificationType: "Common Artifact", _target: motif2, _locationRestriction: "Anywhere.", _monoisotopicMass: 0.984016);
+
+                //PeptideWithSetModifications peptide = new PeptideWithSetModifications("STN[Common Artifact:Deamidation on N]ASTVPFR",
+                //    new Dictionary<string, Modification> { { "Deamidation on N", mod } });
+
+                // finally, run localizer
+                string localizerOutput = LocalizeOGlyc(scan, peptide, deltaMass, PrecursorMassTolerance, ProductMassTolerance);
+            }
         }
 
         [Test]
