@@ -303,13 +303,24 @@ namespace PTMLocalizationTest
                 if (assignedMods.Length > 0)
                 {
                     // TODO: not sure how to translate modifications
-                    string[] assignedModSplits = assignedMods.Split(";");
+                    string[] assignedModSplits = assignedMods.Split(",");
+                    Dictionary<string, Modification> modDefinitionDict = new();
+                    Dictionary<int, string> modsForPeptideSeqDict = new();
+                    string modType = "MSFragger";
 
-                    ModificationMotif.TryGetMotif("C", out ModificationMotif motif2);
-                    Modification mod = new Modification(_originalId: "Deamidation on N", _modificationType: "Common Artifact", _target: motif2, _locationRestriction: "Anywhere.", _monoisotopicMass: 0.984016);
-
-                    peptideWithMods = new PeptideWithSetModifications("STN[Common Artifact:Deamidation on N]ASTVPFR",
-                        new Dictionary<string, Modification> { { "Deamidation on N", mod } });
+                    foreach (string split in assignedModSplits)
+                    {
+                        string[] massSplits = split.Split("(");
+                        string residueType = massSplits[0][massSplits[0].Length - 1].ToString();
+                        int position = Int32.Parse(massSplits[0].Substring(0, massSplits[0].Length - 1)) - 1;   // MSFragger mod positions are 1-indexed, convert to 0-index
+                        double mass = double.Parse(massSplits[1].Replace(")", ""));
+                        string modName = "(" + massSplits[1];
+                        ModificationMotif.TryGetMotif(residueType, out ModificationMotif motif2);
+                        Modification mod = new Modification(_originalId: modName, _modificationType: modType, _target: motif2, _locationRestriction: "Anywhere.", _monoisotopicMass: mass);
+                        modDefinitionDict.TryAdd(mod.IdWithMotif, mod);     // ignore if this mod definition is already present
+                        modsForPeptideSeqDict[position] = string.Format("[{0}:{1}]", modType, mod.IdWithMotif);
+                    }
+                    peptideWithMods = MSFragger_PSMTable.GetMSFraggerPeptide(peptide, modsForPeptideSeqDict, modDefinitionDict);
                 }
                 else
                 {

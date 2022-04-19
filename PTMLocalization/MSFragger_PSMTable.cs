@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Proteomics.ProteolyticDigestion;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -12,7 +13,7 @@ namespace PTMLocalization
      */
     public class MSFragger_PSMTable
     {
-         
+
         public MSFragger_PSMTable(string FilePath)
         {
             this.FilePath = FilePath;
@@ -31,10 +32,10 @@ namespace PTMLocalization
             if (calMZCol != -1)
             {
                 PrecursorMZCol = calMZCol;
-            } 
+            }
             else
             {
-                PrecursorMZCol = GetColumnIndex("Observed M/Z"); 
+                PrecursorMZCol = GetColumnIndex("Observed M/Z");
             }
         }
 
@@ -44,14 +45,14 @@ namespace PTMLocalization
 
         public int DeltaMassCol { get; set; }
         public int AssignedModCol { get; set; }
-        public int PeptideCol{ get; set; }
+        public int PeptideCol { get; set; }
         public int SpectrumCol { get; set; }
         public int ObservedModCol { get; set; }
         public int PrecursorMZCol { get; set; }
 
         public int GetColumnIndex(string columnName)
         {
-            for (int i=0; i < Headers.Length; i++)
+            for (int i = 0; i < Headers.Length; i++)
             {
                 if (Headers[i].Equals(columnName))
                 {
@@ -92,6 +93,27 @@ namespace PTMLocalization
                 scanPairs.Add(Int32.Parse(splits[0]), Int32.Parse(splits[1]));
             }
             return scanPairs;
+        }
+
+        /**
+         * Add the known modifications to peptide sequence to translate to a PeptideWithSetModifications object
+         */
+        public static PeptideWithSetModifications GetMSFraggerPeptide(string baseSequence, Dictionary<int, string> modPositions, Dictionary<string, Proteomics.Modification> modDefinitions)
+        {
+            StringBuilder sb = new();
+            for (int i = 0; i < baseSequence.Length; i++)
+            {
+                // add base sequence residue
+                sb.Append(baseSequence[i]);
+                if (modPositions.ContainsKey(i))
+                {
+                    // there is a mod at this position, place it as well
+                    sb.Append(modPositions[i]);
+                }
+            }
+            string peptideWithMods = sb.ToString();
+            PeptideWithSetModifications finalPeptide = new PeptideWithSetModifications(peptideWithMods, modDefinitions);
+            return finalPeptide;
         }
     }
 }
