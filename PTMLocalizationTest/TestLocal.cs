@@ -238,8 +238,9 @@ namespace PTMLocalizationTest
             MSFragger_PSMTable PSMtable = new(psmFile);
             string currentRawfile = "";
             MsDataFile currentMsDataFile;
-            MsDataScan[] msScans = Array.Empty<MsDataScan>();
             List<string> output = new();
+            output.Add(String.Join("\t", PSMtable.Headers));
+            Dictionary<int, MsDataScan> msScans = new();
 
             foreach (string PSMline in PSMtable.PSMdata)
             {
@@ -261,11 +262,17 @@ namespace PTMLocalizationTest
                     string spectraFile = Path.Combine(TestContext.CurrentContext.TestDirectory, @"GlycoTestData", rawfileName);
                     FilteringParams filter = new FilteringParams();
                     currentMsDataFile = Mgf.LoadAllStaticData(spectraFile, filter);
-                    msScans = currentMsDataFile.GetAllScansList().ToArray();
+                    List < MsDataScan > allScans = currentMsDataFile.GetAllScansList();
+                    // save scans by scan number, since MGF file from MSFragger does not guarantee all scans will be saved (can't use MGF index as true index)
+                    msScans = new();
+                    foreach (MsDataScan currentScan in allScans)
+                    {
+                        msScans[currentScan.OneBasedScanNumber - 1] = currentScan;     // MSFragger scan numbers are 0-based
+                    }
                     currentRawfile = rawfileName;
                 }
 
-                // retrieve the right scan
+                // retrieve the right child scan
                 int childScanNum;
                 if (scanPairs.ContainsKey(scanNum))
                 {
@@ -274,9 +281,19 @@ namespace PTMLocalizationTest
                 else
                 {
                     // no paired child scan found - do not attempt localization
+                    output.Add(String.Join("\t", lineSplits));
                     continue;
                 }
-                var ms2Scan = msScans[childScanNum];    // Note: this was originally MS2 scans only, changed to all scans to (hopefully) preserve original scan indices: needs testing
+                MsDataScan ms2Scan;
+                try
+                {
+                    ms2Scan = msScans[childScanNum];
+                } catch (KeyNotFoundException)
+                {
+                    int x = 0;
+                    output.Add(String.Join("\t", lineSplits));
+                    continue;
+                }
 
                 IsotopicEnvelope[] neutralExperimentalFragments = Ms2ScanWithSpecificMass.GetNeutralExperimentalFragments(ms2Scan, 4, 3);
                 var scan = new Ms2ScanWithSpecificMass(ms2Scan, precursorMZ, precursorCharge, currentRawfile, 4, 3, neutralExperimentalFragments);
