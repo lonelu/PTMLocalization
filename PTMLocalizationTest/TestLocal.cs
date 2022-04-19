@@ -207,6 +207,11 @@ namespace PTMLocalizationTest
                 graphs.Add(localizationGraph);
                 iDLow++;
             }
+            if (graphs.Count == 0)
+            {
+                // no matching glycan boxes found to this delta mass, no localization can be done! 
+                return "No match to glycan delta mass";
+            }
             var best_graph = graphs.OrderByDescending(p => p.TotalScore).First();
             var gsm = new GlycoSpectralMatch(new List<LocalizationGraph> { best_graph }, GlycoType.OGlycoPep);
             gsm.ScanInfo_p = ms2Scan.TheScan.MassSpectrum.Size * productMassTolerance.GetRange(1000).Width / ms2Scan.TheScan.MassSpectrum.Range.Width;
@@ -222,7 +227,7 @@ namespace PTMLocalizationTest
             // load test parameters, spectrum files, and MSFragger PSM table
             Tolerance ProductMassTolerance = new PpmTolerance(10);
             Tolerance PrecursorMassTolerance = new PpmTolerance(20);
-            
+
             //string spectraFile = Path.Combine(TestContext.CurrentContext.TestDirectory, @"GlycoTestData\2019_09_16_StcEmix_35trig_EThcD25_rep1_calibrated.mgf");
 
             string psmFile = Path.Combine(TestContext.CurrentContext.TestDirectory, @"GlycoTestData\psm.tsv");
@@ -234,7 +239,8 @@ namespace PTMLocalizationTest
             string currentRawfile = "";
             MsDataFile currentMsDataFile;
             MsDataScan[] msScans = Array.Empty<MsDataScan>();
-            
+            List<string> output = new();
+
             foreach (string PSMline in PSMtable.PSMdata)
             {
                 string[] lineSplits = PSMline.Split("\t");
@@ -264,7 +270,8 @@ namespace PTMLocalizationTest
                 if (scanPairs.ContainsKey(scanNum))
                 {
                     childScanNum = scanPairs[scanNum];
-                } else
+                }
+                else
                 {
                     // no paired child scan found - do not attempt localization
                     continue;
@@ -275,19 +282,39 @@ namespace PTMLocalizationTest
                 var scan = new Ms2ScanWithSpecificMass(ms2Scan, precursorMZ, precursorCharge, currentRawfile, 4, 3, neutralExperimentalFragments);
 
                 // initialize peptide with all non-glyco mods
-                // TODO
-                //ModificationMotif.TryGetMotif("C", out ModificationMotif motif2);
-                //Modification mod = new Modification(_originalId: "Deamidation on N", _modificationType: "Common Artifact", _target: motif2, _locationRestriction: "Anywhere.", _monoisotopicMass: 0.984016);
+                PeptideWithSetModifications peptideWithMods;
+                if (assignedMods.Length > 0)
+                {
+                    // TODO: not sure how to translate modifications
+                    string[] assignedModSplits = assignedMods.Split(";");
 
-                //PeptideWithSetModifications peptide = new PeptideWithSetModifications("STN[Common Artifact:Deamidation on N]ASTVPFR",
-                //    new Dictionary<string, Modification> { { "Deamidation on N", mod } });
+                    ModificationMotif.TryGetMotif("C", out ModificationMotif motif2);
+                    Modification mod = new Modification(_originalId: "Deamidation on N", _modificationType: "Common Artifact", _target: motif2, _locationRestriction: "Anywhere.", _monoisotopicMass: 0.984016);
+
+                    peptideWithMods = new PeptideWithSetModifications("STN[Common Artifact:Deamidation on N]ASTVPFR",
+                        new Dictionary<string, Modification> { { "Deamidation on N", mod } });
+                }
+                else
+                {
+                    // unmodified peptide
+                    peptideWithMods = new PeptideWithSetModifications(peptide, new Dictionary<string, Modification>());
+                }
 
                 // finally, run localizer
-                string localizerOutput = LocalizeOGlyc(scan, peptide, deltaMass, PrecursorMassTolerance, ProductMassTolerance);
+                string localizerOutput = LocalizeOGlyc(scan, peptideWithMods, deltaMass, PrecursorMassTolerance, ProductMassTolerance);
+
+                // TODO: write back to PSM table
+                List<string> psmLineData = lineSplits.ToList();
+                psmLineData.Add(localizerOutput);
+                output.Add(String.Join("\t", psmLineData));
             }
+            // write output to new PSM table
+            string outputPath = psmFile.Replace("psm.tsv", "edit-psm.tsv");
+            File.WriteAllLines(outputPath, output.ToArray());
         }
 
         [Test]
+        // original single scan test
         public static void OGlycoTest_FragPipeInput()
         {
             //int scanNum, string peptideSequence, double deltaMass
@@ -326,7 +353,8 @@ namespace PTMLocalizationTest
             //Get glycanBox (loop to get all different glycans searched)
             double bestScore = 0;
             GlycoSpectralMatch bestGSM = new GlycoSpectralMatch();
-            for (int boxId = 0; boxId < GlycanBox.OGlycanBoxes.Length; boxId++) {
+            for (int boxId = 0; boxId < GlycanBox.OGlycanBoxes.Length; boxId++)
+            {
                 var glycanBox = GlycanBox.OGlycanBoxes[boxId];
 
                 // only search glycans within the delta mass window
