@@ -226,9 +226,10 @@ namespace PTMLocalizationTest
             //string spectraFile = Path.Combine(TestContext.CurrentContext.TestDirectory, @"GlycoTestData\2019_09_16_StcEmix_35trig_EThcD25_rep1_calibrated.mgf");
 
             string psmFile = Path.Combine(TestContext.CurrentContext.TestDirectory, @"GlycoTestData\psm.tsv");
+            string scanpairFile = Path.Combine(TestContext.CurrentContext.TestDirectory, @"GlycoTestData\_scan-pairs.tsv");
 
             // read PSM table to prepare to pass scans to localizer
-            PSMTableMSFragger PSMtable = new(psmFile);
+            MSFragger_PSMTable PSMtable = new(psmFile);
             string currentRawfile = "";
             MsDataFile currentMsDataFile;
             MsDataScan[] msScans = Array.Empty<MsDataScan>();
@@ -243,9 +244,9 @@ namespace PTMLocalizationTest
                 string assignedMods = lineSplits[PSMtable.AssignedModCol];
                 double precursorMZ = Double.Parse(lineSplits[PSMtable.PrecursorMZCol]);
 
-                int scanNum = PSMTableMSFragger.GetScanNum(spectrumString);
-                string rawfileName = PSMTableMSFragger.GetRawFile(spectrumString);
-                int precursorCharge = PSMTableMSFragger.GetScanCharge(spectrumString);
+                int scanNum = MSFragger_PSMTable.GetScanNum(spectrumString);
+                string rawfileName = MSFragger_PSMTable.GetRawFile(spectrumString);
+                int precursorCharge = MSFragger_PSMTable.GetScanCharge(spectrumString);
 
                 if (!rawfileName.Equals(currentRawfile))
                 {

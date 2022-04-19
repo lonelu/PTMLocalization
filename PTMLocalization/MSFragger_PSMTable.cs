@@ -10,10 +10,10 @@ namespace PTMLocalization
     /**
      * Whole PSM table container with support for getting specific column indices/etc
      */
-    public class PSMTableMSFragger
+    public class MSFragger_PSMTable
     {
          
-        public PSMTableMSFragger(string FilePath)
+        public MSFragger_PSMTable(string FilePath)
         {
             this.FilePath = FilePath;
             string[] allLines = File.ReadAllLines(FilePath);
