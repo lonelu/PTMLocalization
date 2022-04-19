@@ -227,6 +227,7 @@ namespace PTMLocalizationTest
 
             string psmFile = Path.Combine(TestContext.CurrentContext.TestDirectory, @"GlycoTestData\psm.tsv");
             string scanpairFile = Path.Combine(TestContext.CurrentContext.TestDirectory, @"GlycoTestData\_scan-pairs.tsv");
+            Dictionary<int, int> scanPairs = MSFragger_PSMTable.ParseScanPairTable(scanpairFile);
 
             // read PSM table to prepare to pass scans to localizer
             MSFragger_PSMTable PSMtable = new(psmFile);
@@ -259,8 +260,15 @@ namespace PTMLocalizationTest
                 }
 
                 // retrieve the right scan
-                // TODO: find child scan
-                int childScanNum = scanNum + 3;     // NOTE: not correct in many cases
+                int childScanNum;
+                if (scanPairs.ContainsKey(scanNum))
+                {
+                    childScanNum = scanPairs[scanNum];
+                } else
+                {
+                    // no paired child scan found - do not attempt localization
+                    continue;
+                }
                 var ms2Scan = msScans[childScanNum];    // Note: this was originally MS2 scans only, changed to all scans to (hopefully) preserve original scan indices: needs testing
 
                 IsotopicEnvelope[] neutralExperimentalFragments = Ms2ScanWithSpecificMass.GetNeutralExperimentalFragments(ms2Scan, 4, 3);

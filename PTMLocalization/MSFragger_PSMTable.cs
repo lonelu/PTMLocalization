@@ -78,5 +78,20 @@ namespace PTMLocalization
             return Int32.Parse(splits[splits.Length]);
         }
 
+        /**
+         * Parse the scan-pairing information table from FragPipe.
+         * Format: scan1 \t scan2 \n
+         */
+        public static Dictionary<int, int> ParseScanPairTable(string filepath)
+        {
+            Dictionary<int, int> scanPairs = new();
+            string[] allLines = File.ReadAllLines(filepath);
+            foreach (string line in allLines)
+            {
+                string[] splits = line.Split('\t');
+                scanPairs.Add(Int32.Parse(splits[0]), Int32.Parse(splits[1]));
+            }
+            return scanPairs;
+        }
     }
 }
