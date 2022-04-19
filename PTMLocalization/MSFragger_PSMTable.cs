@@ -75,7 +75,7 @@ namespace PTMLocalization
         public static int GetScanCharge(string spectrum)
         {
             string[] splits = spectrum.Split(".");
-            return Int32.Parse(splits[splits.Length]);
+            return Int32.Parse(splits[splits.Length - 1]);
         }
 
         /**

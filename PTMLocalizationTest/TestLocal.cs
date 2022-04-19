@@ -246,13 +246,13 @@ namespace PTMLocalizationTest
                 double precursorMZ = Double.Parse(lineSplits[PSMtable.PrecursorMZCol]);
 
                 int scanNum = MSFragger_PSMTable.GetScanNum(spectrumString);
-                string rawfileName = MSFragger_PSMTable.GetRawFile(spectrumString);
+                string rawfileName = MSFragger_PSMTable.GetRawFile(spectrumString) + "_calibrated.mgf";
                 int precursorCharge = MSFragger_PSMTable.GetScanCharge(spectrumString);
 
                 if (!rawfileName.Equals(currentRawfile))
                 {
                     // new rawfile: load scan data
-                    string spectraFile = Path.Combine(TestContext.CurrentContext.TestDirectory, rawfileName);
+                    string spectraFile = Path.Combine(TestContext.CurrentContext.TestDirectory, @"GlycoTestData", rawfileName);
                     FilteringParams filter = new FilteringParams();
                     currentMsDataFile = Mgf.LoadAllStaticData(spectraFile, filter);
                     msScans = currentMsDataFile.GetAllScansList().ToArray();
