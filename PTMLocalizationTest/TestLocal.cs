@@ -267,7 +267,7 @@ namespace PTMLocalizationTest
                     msScans = new();
                     foreach (MsDataScan currentScan in allScans)
                     {
-                        msScans[currentScan.OneBasedScanNumber - 1] = currentScan;     // MSFragger scan numbers are 0-based
+                        msScans[currentScan.OneBasedScanNumber] = currentScan;
                     }
                     currentRawfile = rawfileName;
                 }
@@ -327,7 +327,6 @@ namespace PTMLocalizationTest
                     // unmodified peptide
                     peptideWithMods = new PeptideWithSetModifications(peptide, new Dictionary<string, Modification>());
                 }
-
                 // finally, run localizer
                 string localizerOutput = LocalizeOGlyc(scan, peptideWithMods, deltaMass, PrecursorMassTolerance, ProductMassTolerance);
 
