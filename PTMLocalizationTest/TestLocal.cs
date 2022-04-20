@@ -173,53 +173,7 @@ namespace PTMLocalizationTest
             var output = gsm.WriteLine(null);
         }
 
-        /**
-         * Single scan O-glycan localization, given a peptide and glycan mass from MSFragger search
-         */
-        public static string LocalizeOGlyc(Ms2ScanWithSpecificMass ms2Scan, PeptideWithSetModifications peptide, double glycanDeltaMass, Tolerance precursorMassTolerance, Tolerance productMassTolerance)
-        {
-            // generate peptide fragments
-            List<Product> products = new List<Product>();
-            peptide.Fragment(DissociationType.ETD, FragmentationTerminus.Both, products);
-
-            // generate glycan modification sites
-            //int[] modPos = GlycoPeptides.GetPossibleModSites(peptide, new string[] { "S", "T" }).OrderBy(v => v).ToArray();
-            List<int> n_modPos = new List<int>();
-            var o_modPos = GlycoPeptides.GetPossibleModSites(peptide, new string[] { "S", "T" }).OrderBy(p => p).ToList();
-
-            int[] _modPos;
-            string[] modMotifs;
-            GlycoPeptides.GetModPosMotif(GlycoType.OGlycoPep, n_modPos.ToArray(), o_modPos.ToArray(), out _modPos, out modMotifs);
-
-            // Get possible O-glycan boxes from delta mass
-            // TODO: allow isotope errors?
-            var possibleGlycanMassLow = precursorMassTolerance.GetMinimumValue(glycanDeltaMass);
-            var possibleGlycanMassHigh = precursorMassTolerance.GetMaximumValue(glycanDeltaMass);
-            int iDLow = GlycoPeptides.BinarySearchGetIndex(GlycanBox.OGlycanBoxes.Select(p => p.Mass).ToArray(), possibleGlycanMassLow);
-
-            List<LocalizationGraph> graphs = new List<LocalizationGraph>();
-            while (iDLow < GlycanBox.OGlycanBoxes.Length && GlycanBox.OGlycanBoxes[iDLow].Mass <= possibleGlycanMassHigh)
-            {
-                LocalizationGraph localizationGraph = new LocalizationGraph(_modPos, modMotifs, GlycanBox.OGlycanBoxes[iDLow], GlycanBox.OGlycanBoxes[iDLow].ChildGlycanBoxes, iDLow);
-                LocalizationGraph.LocalizeMod(localizationGraph, ms2Scan, productMassTolerance,
-                    products.Where(v => v.ProductType == ProductType.c || v.ProductType == ProductType.zDot).ToList(),
-                    GlycoPeptides.GetLocalFragmentGlycan, GlycoPeptides.GetUnlocalFragmentGlycan);
-                graphs.Add(localizationGraph);
-                iDLow++;
-            }
-            if (graphs.Count == 0)
-            {
-                // no matching glycan boxes found to this delta mass, no localization can be done! 
-                return "No match to glycan delta mass";
-            }
-            var best_graph = graphs.OrderByDescending(p => p.TotalScore).First();
-            var gsm = new GlycoSpectralMatch(new List<LocalizationGraph> { best_graph }, GlycoType.OGlycoPep);
-            gsm.ScanInfo_p = ms2Scan.TheScan.MassSpectrum.Size * productMassTolerance.GetRange(1000).Width / ms2Scan.TheScan.MassSpectrum.Range.Width;
-            gsm.Thero_n = products.Count();
-            GlycoSite.GlycoLocalizationCalculation(gsm, gsm.GlycanType, DissociationType.HCD, DissociationType.EThcD);
-
-            return gsm.WriteLine(null);
-        }
+        
 
         [Test]
         public static void OGlycoTest_FragPipe_FullRun()
@@ -227,121 +181,18 @@ namespace PTMLocalizationTest
             // load test parameters, spectrum files, and MSFragger PSM table
             Tolerance ProductMassTolerance = new PpmTolerance(10);
             Tolerance PrecursorMassTolerance = new PpmTolerance(20);
-
-            //string spectraFile = Path.Combine(TestContext.CurrentContext.TestDirectory, @"GlycoTestData\2019_09_16_StcEmix_35trig_EThcD25_rep1_calibrated.mgf");
-
             string psmFile = Path.Combine(TestContext.CurrentContext.TestDirectory, @"GlycoTestData\psm.tsv");
             string scanpairFile = Path.Combine(TestContext.CurrentContext.TestDirectory, @"GlycoTestData\_scan-pairs.tsv");
-            Dictionary<int, int> scanPairs = MSFragger_PSMTable.ParseScanPairTable(scanpairFile);
+            string rawfileDirectory = Path.Combine(TestContext.CurrentContext.TestDirectory, @"GlycoTestData");
+            string glycoDatabase = GlobalVariables.OGlycanLocations.Where(p => p.Contains("OGlycan.gdb")).First();
+            int maxNumGlycans = 3;
 
-            // read PSM table to prepare to pass scans to localizer
-            MSFragger_PSMTable PSMtable = new(psmFile);
-            string currentRawfile = "";
-            MsDataFile currentMsDataFile;
-            List<string> output = new();
-            output.Add(String.Join("\t", PSMtable.Headers));
-            Dictionary<int, MsDataScan> msScans = new();
-
-            foreach (string PSMline in PSMtable.PSMdata)
-            {
-                string[] lineSplits = PSMline.Split("\t");
-                //PSM psm = new(PSMline, PSMtable.Headers);
-                string spectrumString = lineSplits[PSMtable.SpectrumCol];
-                string peptide = lineSplits[PSMtable.PeptideCol];
-                double deltaMass = Double.Parse(lineSplits[PSMtable.DeltaMassCol]);
-                string assignedMods = lineSplits[PSMtable.AssignedModCol];
-                double precursorMZ = Double.Parse(lineSplits[PSMtable.PrecursorMZCol]);
-
-                int scanNum = MSFragger_PSMTable.GetScanNum(spectrumString);
-                string rawfileName = MSFragger_PSMTable.GetRawFile(spectrumString) + "_calibrated.mgf";
-                int precursorCharge = MSFragger_PSMTable.GetScanCharge(spectrumString);
-
-                if (!rawfileName.Equals(currentRawfile))
-                {
-                    // new rawfile: load scan data
-                    string spectraFile = Path.Combine(TestContext.CurrentContext.TestDirectory, @"GlycoTestData", rawfileName);
-                    FilteringParams filter = new FilteringParams();
-                    currentMsDataFile = Mgf.LoadAllStaticData(spectraFile, filter);
-                    List < MsDataScan > allScans = currentMsDataFile.GetAllScansList();
-                    // save scans by scan number, since MGF file from MSFragger does not guarantee all scans will be saved (can't use MGF index as true index)
-                    msScans = new();
-                    foreach (MsDataScan currentScan in allScans)
-                    {
-                        msScans[currentScan.OneBasedScanNumber] = currentScan;
-                    }
-                    currentRawfile = rawfileName;
-                }
-
-                // retrieve the right child scan
-                int childScanNum;
-                if (scanPairs.ContainsKey(scanNum))
-                {
-                    childScanNum = scanPairs[scanNum];
-                }
-                else
-                {
-                    // no paired child scan found - do not attempt localization
-                    output.Add(String.Join("\t", lineSplits));
-                    continue;
-                }
-                MsDataScan ms2Scan;
-                try
-                {
-                    ms2Scan = msScans[childScanNum];
-                } catch (KeyNotFoundException)
-                {
-                    int x = 0;
-                    output.Add(String.Join("\t", lineSplits));
-                    continue;
-                }
-
-                IsotopicEnvelope[] neutralExperimentalFragments = Ms2ScanWithSpecificMass.GetNeutralExperimentalFragments(ms2Scan, 4, 3);
-                var scan = new Ms2ScanWithSpecificMass(ms2Scan, precursorMZ, precursorCharge, currentRawfile, 4, 3, neutralExperimentalFragments);
-
-                // initialize peptide with all non-glyco mods
-                PeptideWithSetModifications peptideWithMods;
-                if (assignedMods.Length > 0)
-                {
-                    // TODO: not sure how to translate modifications
-                    string[] assignedModSplits = assignedMods.Split(",");
-                    Dictionary<string, Modification> modDefinitionDict = new();
-                    Dictionary<int, string> modsForPeptideSeqDict = new();
-                    string modType = "MSFragger";
-
-                    foreach (string split in assignedModSplits)
-                    {
-                        string[] massSplits = split.Split("(");
-                        string residueType = massSplits[0][massSplits[0].Length - 1].ToString();
-                        int position = Int32.Parse(massSplits[0].Substring(0, massSplits[0].Length - 1)) - 1;   // MSFragger mod positions are 1-indexed, convert to 0-index
-                        double mass = double.Parse(massSplits[1].Replace(")", ""));
-                        string modName = "(" + massSplits[1];
-                        ModificationMotif.TryGetMotif(residueType, out ModificationMotif motif2);
-                        Modification mod = new Modification(_originalId: modName, _modificationType: modType, _target: motif2, _locationRestriction: "Anywhere.", _monoisotopicMass: mass);
-                        modDefinitionDict.TryAdd(mod.IdWithMotif, mod);     // ignore if this mod definition is already present
-                        modsForPeptideSeqDict[position] = string.Format("[{0}:{1}]", modType, mod.IdWithMotif);
-                    }
-                    peptideWithMods = MSFragger_PSMTable.GetMSFraggerPeptide(peptide, modsForPeptideSeqDict, modDefinitionDict);
-                }
-                else
-                {
-                    // unmodified peptide
-                    peptideWithMods = new PeptideWithSetModifications(peptide, new Dictionary<string, Modification>());
-                }
-                // finally, run localizer
-                string localizerOutput = LocalizeOGlyc(scan, peptideWithMods, deltaMass, PrecursorMassTolerance, ProductMassTolerance);
-
-                // TODO: write back to PSM table
-                List<string> psmLineData = lineSplits.ToList();
-                psmLineData.Add(localizerOutput);
-                output.Add(String.Join("\t", psmLineData));
-            }
-            // write output to new PSM table
-            string outputPath = psmFile.Replace("psm.tsv", "edit-psm.tsv");
-            File.WriteAllLines(outputPath, output.ToArray());
+            var localizer = new MSFragger_RunLocalization(psmFile, scanpairFile, rawfileDirectory, glycoDatabase, maxNumGlycans, PrecursorMassTolerance, ProductMassTolerance);
+            localizer.Localize();
         }
 
         [Test]
-        // original single scan test
+        // original single scan MSFragger test
         public static void OGlycoTest_FragPipeInput()
         {
             //int scanNum, string peptideSequence, double deltaMass
