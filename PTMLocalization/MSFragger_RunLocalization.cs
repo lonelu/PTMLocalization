@@ -126,36 +126,8 @@ namespace PTMLocalization
                 var scan = new Ms2ScanWithSpecificMass(ms2Scan, precursorMZ, precursorCharge, currentRawfile, 4, 3, neutralExperimentalFragments);
 
                 // initialize peptide with all non-glyco mods
-                PeptideWithSetModifications peptideWithMods;
-                if (assignedMods.Length > 0)
-                {
-                    // MSFragger mods are present: generate a peptide with them included
-                    string[] assignedModSplits = assignedMods.Split(",");
-                    Dictionary<string, Modification> modDefinitionDict = new();
-                    Dictionary<int, string> modsForPeptideSeqDict = new();
-                    string modType = "MSFragger";
-
-                    foreach (string split in assignedModSplits)
-                    {
-                        string[] massSplits = split.Split("(");
-                        string residueType = massSplits[0][massSplits[0].Length - 1].ToString();
-                        int position = Int32.Parse(massSplits[0].Substring(0, massSplits[0].Length - 1)) - 1;   // MSFragger mod positions are 1-indexed, convert to 0-index
-                        double mass = double.Parse(massSplits[1].Replace(")", ""));
-                        string modName = "(" + massSplits[1];
-                        // Generate a Modification of type "MSFragger" with ID "(mass)" 
-                        ModificationMotif.TryGetMotif(residueType, out ModificationMotif motif2);
-                        Modification mod = new Modification(_originalId: modName, _modificationType: modType, _target: motif2, _locationRestriction: "Anywhere.", _monoisotopicMass: mass);
-                        modDefinitionDict.TryAdd(mod.IdWithMotif, mod);     // ignore if this mod definition is already present
-                        modsForPeptideSeqDict[position] = string.Format("[{0}:{1}]", modType, mod.IdWithMotif);
-                    }
-                    peptideWithMods = MSFragger_PSMTable.GetMSFraggerPeptide(peptide, modsForPeptideSeqDict, modDefinitionDict);
-                }
-                else
-                {
-                    // unmodified peptide
-                    peptideWithMods = new PeptideWithSetModifications(peptide, new Dictionary<string, Modification>());
-                }
-
+                PeptideWithSetModifications peptideWithMods = getPeptideWithMSFraggerMods(assignedMods, peptide);
+                
                 // finally, run localizer
                 string localizerOutput = LocalizeOGlyc(scan, peptideWithMods, deltaMass, PrecursorMassTolerance, ProductMassTolerance);
 
@@ -215,6 +187,62 @@ namespace PTMLocalization
             GlycoSite.GlycoLocalizationCalculation(gsm, gsm.GlycanType, DissociationType.HCD, DissociationType.EThcD);
 
             return gsm.WriteLine(null);
+        }
+
+        /**
+         * Set up the peptide container with MSFragger assigned modifications included. 
+         */
+        private PeptideWithSetModifications getPeptideWithMSFraggerMods(string assignedMods, string peptide)
+        {
+            PeptideWithSetModifications peptideWithMods;
+            if (assignedMods.Length > 0)
+            {
+                // MSFragger mods are present: generate a peptide with them included
+                string[] assignedModSplits = assignedMods.Split(",");
+                Dictionary<string, Modification> modDefinitionDict = new();
+                Dictionary<int, string> modsForPeptideSeqDict = new();
+                string modType = "MSFragger";
+
+                foreach (string split in assignedModSplits)
+                {
+                    string[] massSplits = split.Split("(");
+                    string residueType;
+                    int position;
+                    // handle terminal mods as well
+                    if (split.Contains("N-term"))
+                    {
+                        // terminal mod, position and residue type are different (encoding as the terminal residue, not the terminus, because I don't know the syntax for the terminus)
+                        residueType = peptide[0].ToString();
+                        position = 0;
+                    } 
+                    else if (split.Contains("C-term"))
+                    {
+                        // terminal mod, position and residue type are different (encoding as the terminal residue, not the terminus, because I don't know the syntax for the terminus)
+                        residueType = peptide[peptide.Length - 1].ToString();
+                        position = peptide.Length - 1;
+                    }
+                    else
+                    {
+                        residueType = massSplits[0][massSplits[0].Length - 1].ToString();
+                        position = Int32.Parse(massSplits[0].Substring(0, massSplits[0].Length - 1)) - 1;   // MSFragger mod positions are 1-indexed, convert to 0-index
+                    }
+                    
+                    double mass = double.Parse(massSplits[1].Replace(")", ""));
+                    string modName = "(" + massSplits[1];
+                    // Generate a Modification of type "MSFragger" with ID "(mass)" 
+                    ModificationMotif.TryGetMotif(residueType, out ModificationMotif motif2);
+                    Modification mod = new Modification(_originalId: modName, _modificationType: modType, _target: motif2, _locationRestriction: "Anywhere.", _monoisotopicMass: mass);
+                    modDefinitionDict.TryAdd(mod.IdWithMotif, mod);     // ignore if this mod definition is already present
+                    modsForPeptideSeqDict[position] = string.Format("[{0}:{1}]", modType, mod.IdWithMotif);
+                }
+                peptideWithMods = MSFragger_PSMTable.GetMSFraggerPeptide(peptide, modsForPeptideSeqDict, modDefinitionDict);
+            }
+            else
+            {
+                // unmodified peptide
+                peptideWithMods = new PeptideWithSetModifications(peptide, new Dictionary<string, Modification>());
+            }
+            return peptideWithMods;
         }
     }
 }
