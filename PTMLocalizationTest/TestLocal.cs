@@ -180,14 +180,15 @@ namespace PTMLocalizationTest
         {
             // load test parameters, spectrum files, and MSFragger PSM table
             Tolerance ProductMassTolerance = new PpmTolerance(10);
-            Tolerance PrecursorMassTolerance = new PpmTolerance(20);
+            Tolerance PrecursorMassTolerance = new PpmTolerance(30);
             string psmFile = Path.Combine(TestContext.CurrentContext.TestDirectory, @"GlycoTestData\psm.tsv");
             string scanpairFile = Path.Combine(TestContext.CurrentContext.TestDirectory, @"GlycoTestData\_scan-pairs.tsv");
             string rawfileDirectory = Path.Combine(TestContext.CurrentContext.TestDirectory, @"GlycoTestData");
             string glycoDatabase = GlobalVariables.OGlycanLocations.Where(p => p.Contains("OGlycan.gdb")).First();
             int maxNumGlycans = 3;
+            int[] isotopes = { 0, 1, 2 };
 
-            var localizer = new MSFragger_RunLocalization(psmFile, scanpairFile, rawfileDirectory, glycoDatabase, maxNumGlycans, PrecursorMassTolerance, ProductMassTolerance);
+            var localizer = new MSFragger_RunLocalization(psmFile, scanpairFile, rawfileDirectory, glycoDatabase, maxNumGlycans, PrecursorMassTolerance, ProductMassTolerance, isotopes);
             localizer.Localize();
         }
 

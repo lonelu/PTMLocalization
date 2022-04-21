@@ -22,8 +22,10 @@ namespace PTMLocalization
         private readonly string rawfilesDirectory;
         private readonly string o_glycan_database;
         private int maxOGlycansPerPeptide;
+        private int[] isotopes;
+        public static readonly double AveragineIsotopeMass = 1.00235;
 
-        public MSFragger_RunLocalization(string _psmFile, string _scanpairFile, string _rawfilesDirectory, string _o_glycan_database_path, int _maxOGlycansPerPeptide, Tolerance _PrecursorMassTolerance, Tolerance _ProductMassTolerance)
+        public MSFragger_RunLocalization(string _psmFile, string _scanpairFile, string _rawfilesDirectory, string _o_glycan_database_path, int _maxOGlycansPerPeptide, Tolerance _PrecursorMassTolerance, Tolerance _ProductMassTolerance, int[] _isotopes)
         {
             psmFile = _psmFile;
             scanpairFile = _scanpairFile;
@@ -32,6 +34,7 @@ namespace PTMLocalization
             PrecursorMassTolerance = _PrecursorMassTolerance;
             ProductMassTolerance = _ProductMassTolerance;
             maxOGlycansPerPeptide = _maxOGlycansPerPeptide;
+            isotopes = _isotopes;
 
             Setup();
         }
@@ -67,13 +70,21 @@ namespace PTMLocalization
 
             foreach (string PSMline in PSMtable.PSMdata)
             {
+                // Parse PSM information
                 string[] lineSplits = PSMline.Split("\t");
                 string spectrumString = lineSplits[PSMtable.SpectrumCol];
                 string peptide = lineSplits[PSMtable.PeptideCol];
                 double deltaMass = Double.Parse(lineSplits[PSMtable.DeltaMassCol]);
                 string assignedMods = lineSplits[PSMtable.AssignedModCol];
                 double precursorMZ = Double.Parse(lineSplits[PSMtable.PrecursorMZCol]);
+                if (deltaMass < 3.5 && deltaMass > -1.5)
+                {
+                    // unmodified peptide - no localization
+                    output.Add(PSMline);
+                    continue;
+                }
 
+                // Load scan (and rawfile if necessary)
                 int scanNum = MSFragger_PSMTable.GetScanNum(spectrumString);
                 // TODO: add catch for file not found
                 string rawfileName = MSFragger_PSMTable.GetRawFile(spectrumString) + "_calibrated.mgf";
@@ -104,7 +115,7 @@ namespace PTMLocalization
                 else
                 {
                     // no paired child scan found - do not attempt localization
-                    output.Add(String.Join("\t", lineSplits));
+                    output.Add(PSMline);
                     continue;
                 }
 
@@ -117,7 +128,7 @@ namespace PTMLocalization
                 catch (KeyNotFoundException)
                 {
                     Console.Out.WriteLine(String.Format("Error: MS2 scan {0} not found in the MGF file. No localization performed", childScanNum));
-                    output.Add(String.Join("\t", lineSplits));
+                    output.Add(PSMline);
                     continue;
                 }
 
@@ -129,7 +140,7 @@ namespace PTMLocalization
                 PeptideWithSetModifications peptideWithMods = getPeptideWithMSFraggerMods(assignedMods, peptide);
                 
                 // finally, run localizer
-                string localizerOutput = LocalizeOGlyc(scan, peptideWithMods, deltaMass, PrecursorMassTolerance, ProductMassTolerance);
+                string localizerOutput = LocalizeOGlyc(scan, peptideWithMods, deltaMass);
 
                 // write info back to PSM table
                 List<string> psmLineData = lineSplits.ToList();
@@ -145,7 +156,7 @@ namespace PTMLocalization
         /**
          * Single scan O-glycan localization, given a peptide and glycan mass from MSFragger search
          */
-        public static string LocalizeOGlyc(Ms2ScanWithSpecificMass ms2Scan, PeptideWithSetModifications peptide, double glycanDeltaMass, Tolerance precursorMassTolerance, Tolerance productMassTolerance)
+        public string LocalizeOGlyc(Ms2ScanWithSpecificMass ms2Scan, PeptideWithSetModifications peptide, double glycanDeltaMass)
         {
             // generate peptide fragments
             List<Product> products = new List<Product>();
@@ -160,20 +171,24 @@ namespace PTMLocalization
             GlycoPeptides.GetModPosMotif(GlycoType.OGlycoPep, n_modPos.ToArray(), o_modPos.ToArray(), out _modPos, out modMotifs);
 
             // Get possible O-glycan boxes from delta mass
-            // TODO: allow isotope errors?
-            var possibleGlycanMassLow = precursorMassTolerance.GetMinimumValue(glycanDeltaMass);
-            var possibleGlycanMassHigh = precursorMassTolerance.GetMaximumValue(glycanDeltaMass);
-            int iDLow = GlycoPeptides.BinarySearchGetIndex(GlycanBox.OGlycanBoxes.Select(p => p.Mass).ToArray(), possibleGlycanMassLow);
-
             List<LocalizationGraph> graphs = new List<LocalizationGraph>();
-            while (iDLow < GlycanBox.OGlycanBoxes.Length && GlycanBox.OGlycanBoxes[iDLow].Mass <= possibleGlycanMassHigh)
+            // consider possible precursor isotope errors because we disable precursor correction in MSFragger for easier scan pairing (to the original precursor)
+            foreach (int isotope in isotopes)
             {
-                LocalizationGraph localizationGraph = new LocalizationGraph(_modPos, modMotifs, GlycanBox.OGlycanBoxes[iDLow], GlycanBox.OGlycanBoxes[iDLow].ChildGlycanBoxes, iDLow);
-                LocalizationGraph.LocalizeMod(localizationGraph, ms2Scan, productMassTolerance,
-                    products.Where(v => v.ProductType == ProductType.c || v.ProductType == ProductType.zDot).ToList(),
-                    GlycoPeptides.GetLocalFragmentGlycan, GlycoPeptides.GetUnlocalFragmentGlycan);
-                graphs.Add(localizationGraph);
-                iDLow++;
+                double currentDeltaMass = glycanDeltaMass - (isotope * AveragineIsotopeMass);
+                var possibleGlycanMassLow = PrecursorMassTolerance.GetMinimumValue(currentDeltaMass);
+                var possibleGlycanMassHigh = PrecursorMassTolerance.GetMaximumValue(currentDeltaMass);
+                int iDLow = GlycoPeptides.BinarySearchGetIndex(GlycanBox.OGlycanBoxes.Select(p => p.Mass).ToArray(), possibleGlycanMassLow);
+
+                while (iDLow < GlycanBox.OGlycanBoxes.Length && GlycanBox.OGlycanBoxes[iDLow].Mass <= possibleGlycanMassHigh)
+                {
+                    LocalizationGraph localizationGraph = new LocalizationGraph(_modPos, modMotifs, GlycanBox.OGlycanBoxes[iDLow], GlycanBox.OGlycanBoxes[iDLow].ChildGlycanBoxes, iDLow);
+                    LocalizationGraph.LocalizeMod(localizationGraph, ms2Scan, ProductMassTolerance,
+                        products.Where(v => v.ProductType == ProductType.c || v.ProductType == ProductType.zDot).ToList(),
+                        GlycoPeptides.GetLocalFragmentGlycan, GlycoPeptides.GetUnlocalFragmentGlycan);
+                    graphs.Add(localizationGraph);
+                    iDLow++;
+                }
             }
             if (graphs.Count == 0)
             {
@@ -182,7 +197,7 @@ namespace PTMLocalization
             }
             var best_graph = graphs.OrderByDescending(p => p.TotalScore).First();
             var gsm = new GlycoSpectralMatch(new List<LocalizationGraph> { best_graph }, GlycoType.OGlycoPep);
-            gsm.ScanInfo_p = ms2Scan.TheScan.MassSpectrum.Size * productMassTolerance.GetRange(1000).Width / ms2Scan.TheScan.MassSpectrum.Range.Width;
+            gsm.ScanInfo_p = ms2Scan.TheScan.MassSpectrum.Size * ProductMassTolerance.GetRange(1000).Width / ms2Scan.TheScan.MassSpectrum.Range.Width;
             gsm.Thero_n = products.Count();
             GlycoSite.GlycoLocalizationCalculation(gsm, gsm.GlycanType, DissociationType.HCD, DissociationType.EThcD);
 
