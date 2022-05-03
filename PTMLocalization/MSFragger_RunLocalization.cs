@@ -50,6 +50,7 @@ namespace PTMLocalization
             GlycanBox.OGlycanBoxes = GlycanBox.BuildGlycanBoxes(maxOGlycansPerPeptide, GlycanBox.GlobalOGlycans, GlycanBox.GlobalOGlycanMods).OrderBy(p => p.Mass).ToArray();
         }
 
+
         /**
          * Main method to localize from MSFragger outputs. Loads the MSFragger PSM and scan-pair tables, parses PSM information
          * to determine which scans to localize and the input peptides/glycan masses for those scans, runs localization,
