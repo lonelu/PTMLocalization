@@ -6,8 +6,6 @@ The program could be used for O-Glycopeptide ETD/EThcD spectrum O-Glycan localiz
 
 Users can add their own database for special purpose.
 
-Start MetaMorpheus -> Setting -> Open Data with mods/data files -> go to folder ...\MetaMorpheus\Glycan_Mods\OGlycan, paste your own glycan database file here -> Restart MetaMorpheus -> You will see your own database.
-
 You can follow the exist glycan database files to create the new glycan database files. 
 
 The database file should follow the following format:
