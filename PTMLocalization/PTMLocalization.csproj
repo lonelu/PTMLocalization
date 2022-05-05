@@ -2,6 +2,18 @@
 
   <PropertyGroup>
     <TargetFramework>net5.0</TargetFramework>
+    <Company>http://smith.chem.wisc.edu</Company>
+    <PackageTags>Proteomics, O-Pair, O-Glycosylation localization, PTM localization, O-Glycan, N-Glycan.</PackageTags>
+    <PackageProjectUrl></PackageProjectUrl>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Version>1.0.0</Version>
+    <Authors>lonelu, Dan</Authors>
+    <Description>Glycosylation localization</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/lonelu/PTMLocalization</RepositoryUrl>
+    <PackageIcon>OPair_log.jpg</PackageIcon>
+    <PackageIconUrl />
   </PropertyGroup>
 
   <ItemGroup>
@@ -38,6 +50,10 @@
     </None>
     <None Update="Glycan_Mods\OGlycan\Olgycan Database 36 glycans with Mann.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\OPair_log.jpg">
+      <Pack>True</Pack>
+      <PackagePath></PackagePath>
     </None>
   </ItemGroup>
 

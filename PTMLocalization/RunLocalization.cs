@@ -5,9 +5,11 @@ using Proteomics.ProteolyticDigestion;
 using System.Collections.Generic;
 using System.Linq;
 using MassSpectrometry;
+using System;
+using EngineLayer;
+using EngineLayer.GlycoSearch;
 
-
-namespace EngineLayer.GlycoSearch
+namespace PTMLocalization
 {
     public class RunLocalization
     {
@@ -21,6 +23,12 @@ namespace EngineLayer.GlycoSearch
 
         private readonly string _oglycanDatabase;
         private readonly string _nglycanDatabase;
+
+        public RunLocalization()
+        {
+
+        }
+
         public RunLocalization(string oglycanDatabase, string nglycanDatabase, GlycoSearchType glycoSearchType, bool mixedGlycanAllowed, int maxOGlycanNum, int maxNGlycanNum)
         {
             this.GlycoSearchType = glycoSearchType;
@@ -146,5 +154,10 @@ namespace EngineLayer.GlycoSearch
 
         }
             
+        public void test_run(string x)
+        {
+            Console.WriteLine("PTMLocalization version: 1.0.");
+            Console.WriteLine(x);
+        }
     }
 }
