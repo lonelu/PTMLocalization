@@ -15,10 +15,10 @@ namespace CMD
         public enum VerbosityType { none, minimal, normal };
 
         [Option('b', Default = 10, HelpText = "[Optional] productPpmTol ")]
-        public int productPpmTol { get; set; }
+        public double productPpmTol { get; set; }
 
         [Option('c', Default = 30, HelpText = "[Optional] precursorPpmTol ")]
-        public int precursorPpmTol { get; set; }
+        public double precursorPpmTol { get; set; }
 
         [Option('g', Default = "OGlycan.gdb", HelpText = "[Optional] glycoDatabase ")]
         public string glycoDatabase { get; set; }
@@ -32,7 +32,7 @@ namespace CMD
         [Option('s', HelpText = "[Optional] psmFile")]
         public string psmFile { get; set; }
 
-        [Option('p', HelpText = "[Optional] scanpairFile")]
+        [Option('p', HelpText = "[Optional] scanpairFile. Searches raw file directory if not provided ")]
         public string scanpairFile { get; set; }
 
         [Option('o', HelpText = "[Optional] Output folder")]

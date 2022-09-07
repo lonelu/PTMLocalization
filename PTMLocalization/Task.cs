@@ -20,11 +20,16 @@ namespace PTMLocalization
 {
     public class Task
     {
-        public void run_msfragger(int productPpmTol, int PrecursorPpmTol, string psmFile, string scanpairFile, string rawfileDirectory, string glycoDatabase, int maxNumGlycans)
+        public void run_msfragger(double productPpmTol, double PrecursorPpmTol, string psmFile, string scanpairFile, string rawfileDirectory, string glycoDatabase, int maxNumGlycans)
         {
             Tolerance ProductMassTolerance = new PpmTolerance(productPpmTol);
             Tolerance PrecursorMassTolerance = new PpmTolerance(PrecursorPpmTol);
-            string _glycoDatabase = GlobalVariables.OGlycanLocations.Where(p => p.Contains(glycoDatabase)).First();
+            if (psmFile == null)
+            {
+                Console.WriteLine("No PSM file specified, exiting.");
+                // todo: exit
+            }
+            string _glycodatabase = GlobalVariables.OGlycanLocations.Where(p => p.Contains(glycoDatabase)).First();
 
             //Tolerance ProductMassTolerance = new PpmTolerance(10);
             //Tolerance PrecursorMassTolerance = new PpmTolerance(30);
@@ -35,7 +40,7 @@ namespace PTMLocalization
             //int maxNumGlycans = 3;
             int[] isotopes = { 0, 1, 2 };
 
-            var localizer = new MSFragger_RunLocalization(psmFile, scanpairFile, rawfileDirectory, _glycoDatabase, maxNumGlycans, PrecursorMassTolerance, ProductMassTolerance, isotopes);
+            var localizer = new MSFragger_RunLocalization(psmFile, scanpairFile, rawfileDirectory, _glycodatabase, maxNumGlycans, PrecursorMassTolerance, ProductMassTolerance, isotopes);
             localizer.Localize();
         }
 

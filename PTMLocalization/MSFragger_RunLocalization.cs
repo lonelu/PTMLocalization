@@ -58,16 +58,20 @@ namespace PTMLocalization
          */
         public void Localize()
         {
-            // load parameters, spectrum files, and MSFragger PSM table
-            Dictionary<int, int> scanPairs = MSFragger_PSMTable.ParseScanPairTable(scanpairFile);
+            Dictionary<int, int> scanPairs = new();
+            if (scanpairFile != null)
+            {
+                // single scanPair file passed directly - use. Otherwise, will read below during PSM reading
+                scanPairs = MSFragger_PSMTable.ParseScanPairTable(scanpairFile);
+            }
 
             // read PSM table to prepare to pass scans to localizer
             MSFragger_PSMTable PSMtable = new(psmFile);
             string currentRawfile = "";
             MsDataFile currentMsDataFile;
+            Dictionary<int, MsDataScan> msScans = new();
             List<string> output = new();
             output.Add(String.Join("\t", PSMtable.Headers));
-            Dictionary<int, MsDataScan> msScans = new();
 
             foreach (string PSMline in PSMtable.PSMdata)
             {
@@ -89,6 +93,7 @@ namespace PTMLocalization
                 int scanNum = MSFragger_PSMTable.GetScanNum(spectrumString);
                 // TODO: add catch for file not found
                 string rawfileName = MSFragger_PSMTable.GetRawFile(spectrumString) + "_calibrated.mgf";
+                string scanpairName = MSFragger_PSMTable.GetRawFile(spectrumString) + ".pairs";
                 int precursorCharge = MSFragger_PSMTable.GetScanCharge(spectrumString);
 
                 if (!rawfileName.Equals(currentRawfile))
@@ -103,6 +108,13 @@ namespace PTMLocalization
                     foreach (MsDataScan currentScan in allScans)
                     {
                         msScans[currentScan.OneBasedScanNumber] = currentScan;
+                    }
+
+                    // load scan pair file if not done already
+                    if (scanpairFile == null)
+                    {
+                        string pairsFile = Path.Combine(rawfilesDirectory, scanpairName);
+                        scanPairs = MSFragger_PSMTable.ParseScanPairTable(pairsFile);
                     }
                     currentRawfile = rawfileName;
                 }
