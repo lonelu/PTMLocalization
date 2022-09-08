@@ -23,7 +23,10 @@ namespace PTMLocalization
         private readonly string o_glycan_database;
         private int maxOGlycansPerPeptide;
         private int[] isotopes;
+        
         public static readonly double AveragineIsotopeMass = 1.00235;
+        public static readonly string OPAIR_HEADERS = "OPair Score\tNumber of Glycans\tNum Possible Glycosites\tGlycan Mass\tTotal Glycan Comp\tGlycan Site Comp(s)\tConfidence Level\tSite Probabilities\t(site probs 2?)\tBest Route\tAll Routes";
+        private int outputLength;
 
         public MSFragger_RunLocalization(string _psmFile, string _scanpairFile, string _rawfilesDirectory, string _o_glycan_database_path, int _maxOGlycansPerPeptide, Tolerance _PrecursorMassTolerance, Tolerance _ProductMassTolerance, int[] _isotopes)
         {
@@ -36,6 +39,7 @@ namespace PTMLocalization
             maxOGlycansPerPeptide = _maxOGlycansPerPeptide;
             isotopes = _isotopes;
 
+            outputLength = OPAIR_HEADERS.Split("\t").Length;
             Setup();
         }
 
@@ -71,7 +75,18 @@ namespace PTMLocalization
             MsDataFile currentMsDataFile;
             Dictionary<int, MsDataScan> msScans = new();
             List<string> output = new();
-            output.Add(String.Join("\t", PSMtable.Headers));
+            bool overwritePrevious = false;
+            if (PSMtable.Headers.Contains("OPair Score"))
+            {
+                // overwriting previous OP results, don't add new columns
+                output.Add(String.Join("\t", PSMtable.Headers));
+                overwritePrevious = true;
+            } else
+            {
+                List<string> newHeaders = PSMtable.Headers.ToList();
+                newHeaders.Add(OPAIR_HEADERS);
+                output.Add(String.Join("\t", newHeaders));
+            }
 
             foreach (string PSMline in PSMtable.PSMdata)
             {
@@ -157,12 +172,24 @@ namespace PTMLocalization
 
                 // write info back to PSM table
                 List<string> psmLineData = lineSplits.ToList();
-                psmLineData.Add(localizerOutput);
+                if (!overwritePrevious)
+                {
+                    psmLineData.Add(localizerOutput);
+                } 
+                else
+                {
+                    // previous scan data exists - overwrite it
+                    string[] localizerOutputEntries = localizerOutput.Split("\t");
+                    int startPos = psmLineData.Count - localizerOutputEntries.Length;      // assumes same length localizer output as before
+                    for (int i=0; i < localizerOutputEntries.Length; i++)
+                    {
+                        psmLineData[startPos + i] = localizerOutputEntries[i];
+                    }
+                }
                 output.Add(String.Join("\t", psmLineData));
             }
-            // write output to new PSM table
-            string outputPath = psmFile.Replace("psm.tsv", "edit-psm.tsv");     // TODO: remove this when done testing
-            File.WriteAllLines(outputPath, output.ToArray());
+            // write output to PSM table
+            File.WriteAllLines(psmFile, output.ToArray());
         }
 
 
@@ -206,7 +233,7 @@ namespace PTMLocalization
             if (graphs.Count == 0)
             {
                 // no matching glycan boxes found to this delta mass, no localization can be done! 
-                return "No match to glycan delta mass";
+                return "No match to glycan delta mass" + string.Concat(Enumerable.Repeat("\t", outputLength));      // the psm line the same length as all other outputs
             }
             var best_graph = graphs.OrderByDescending(p => p.TotalScore).First();
             var gsm = new GlycoSpectralMatch(new List<LocalizationGraph> { best_graph }, GlycoType.OGlycoPep);
