@@ -67,6 +67,7 @@ namespace CMD
                 if (settings.Verbosity == CmdSettings.VerbosityType.minimal || settings.Verbosity == CmdSettings.VerbosityType.normal)
                 {
                     Console.WriteLine(message);
+                    Console.WriteLine(e.StackTrace);
                     Console.WriteLine(settings.ToString());
                 }
                 errorCode = 4;
