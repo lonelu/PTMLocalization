@@ -42,15 +42,19 @@ namespace CMD
                 Console.WriteLine("PTMLocalization version: 1.0.");
             }
 
-            GlobalVariables.SetUpGlobalVariables();
+            // check settings and trim input paths
+            bool pathsOK = CheckParamsAndPaths(settings);
+            if (!pathsOK)
+            {
+                Console.WriteLine("Please fix the provided file path(s) and try again");
+                errorCode = 1;
+                return errorCode;
+            }
 
-            //var task = new Task();
-            //task.run_msfragger(settings.productPpmTol, settings.precursorPpmTol, settings.psmFile, settings.scanpairFile, settings.rawfileDirectory, settings.glycoDatabase, settings.maxNumGlycans);
+            GlobalVariables.SetUpGlobalVariables();
 
             try
             {
-                //var a = new PTMLocalization.RunLocalization();
-                //a.test_run(settings.OutputFolder);
                 var task = new Task();
                 task.run_msfragger(settings.productPpmTol, settings.precursorPpmTol, settings.psmFile, settings.scanpairFile, settings.rawfileDirectory, settings.glycoDatabase, settings.maxNumGlycans);
                 Console.WriteLine("Run finished.");
@@ -74,6 +78,49 @@ namespace CMD
             }
 
             return errorCode;
+        }
+
+        private static bool CheckParamsAndPaths(CmdSettings settings)
+        {
+            // trim file/directory paths (if provided) and confirm all specified files exist
+            if (settings.psmFile != null)
+            {
+                settings.psmFile = settings.psmFile.Trim();
+                if (!File.Exists(settings.psmFile))
+                {
+                    Console.WriteLine("Error: PSM file not found at {0}", settings.psmFile);
+                    return false;
+                }
+            }
+            if (settings.scanpairFile != null)
+            {
+                settings.scanpairFile = settings.scanpairFile.Trim();
+                if (!File.Exists(settings.scanpairFile))
+                {
+                    Console.WriteLine("Error: Scan pair file not found at {0}", settings.scanpairFile);
+                    return false;
+                }
+            }
+            if (settings.rawfileDirectory != null)
+            {
+                settings.rawfileDirectory = settings.rawfileDirectory.Trim();
+                if (!Directory.Exists(settings.rawfileDirectory))
+                {
+                    Console.WriteLine("Error: rawfile directory not found at {0}", settings.rawfileDirectory);
+                    return false;
+                }
+            }
+            // todo: glyco database parsing/checks
+            //if (settings.glycoDatabase != null)
+            //{
+            //    settings.psmFile = settings.psmFile.Trim();
+            //    if (!Directory.Exists(settings.psmFile))
+            //    {
+            //        Console.WriteLine("Error: PSM file not found at {0}", settings.psmFile);
+            //        return false;
+            //    }
+            //}
+            return true;
         }
 
         public static int DisplayHelp<T>(ParserResult<T> result, IEnumerable<Error> errs)
