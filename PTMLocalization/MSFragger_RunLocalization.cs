@@ -7,6 +7,7 @@ using Proteomics.ProteolyticDigestion;
 using MzLibUtil;
 using EngineLayer.GlycoSearch;
 using IO.Mgf;
+using IO.MzML;
 using MassSpectrometry;
 using EngineLayer;
 using System.IO;
@@ -72,6 +73,7 @@ namespace PTMLocalization
             // read PSM table to prepare to pass scans to localizer
             MSFragger_PSMTable PSMtable = new(psmFile);
             string currentRawfile = "";
+            string currentRawfileBase = "";
             MsDataFile currentMsDataFile;
             Dictionary<int, MsDataScan> msScans = new();
             List<string> output = new();
@@ -88,6 +90,7 @@ namespace PTMLocalization
                 output.Add(String.Join("\t", newHeaders));
             }
 
+            Dictionary<string, bool> mgfNotFoundWarnings = new ();
             foreach (string PSMline in PSMtable.PSMdata)
             {
                 // Parse PSM information
@@ -106,17 +109,41 @@ namespace PTMLocalization
 
                 // Load scan (and rawfile if necessary)
                 int scanNum = MSFragger_PSMTable.GetScanNum(spectrumString);
-                // TODO: add catch for file not found
-                string rawfileName = MSFragger_PSMTable.GetRawFile(spectrumString) + "_calibrated.mgf";
-                string scanpairName = MSFragger_PSMTable.GetRawFile(spectrumString) + ".pairs";
+                string rawfileBase = MSFragger_PSMTable.GetRawFile(spectrumString);
+                string rawfileName = rawfileBase + "_calibrated.mgf";
+                string scanpairName = rawfileBase + ".pairs";
                 int precursorCharge = MSFragger_PSMTable.GetScanCharge(spectrumString);
 
-                if (!rawfileName.Equals(currentRawfile))
+                if (!rawfileBase.Equals(currentRawfileBase))
                 {
                     // new rawfile: load scan data
                     string spectraFile = Path.Combine(rawfilesDirectory, rawfileName);
                     FilteringParams filter = new FilteringParams();
-                    currentMsDataFile = Mgf.LoadAllStaticData(spectraFile, filter);
+                    if (File.Exists(spectraFile))
+                    {
+                        currentMsDataFile = Mgf.LoadAllStaticData(spectraFile, filter);
+                    }
+                    else
+                    {
+                        // no MGF found, try falling back to mzML
+                        rawfileName = rawfileBase + ".mzML";
+                        spectraFile = Path.Combine(rawfilesDirectory, rawfileName);
+                        if (File.Exists(spectraFile))
+                        {
+                            currentMsDataFile = Mzml.LoadAllStaticData(spectraFile, filter);
+                            // warn user that MGF wasn't found for this raw file if we haven't already done so
+                            if (!mgfNotFoundWarnings.ContainsKey(rawfileBase))
+                            {
+                                Console.WriteLine("Warning: calibrated MGF file not found for raw file {0}, uncalibrated mzML will be used", rawfileBase);
+                                mgfNotFoundWarnings.Add(rawfileBase, true);
+                            }
+                        } 
+                        else 
+                        {
+                            Console.WriteLine("Warning: no MGF or mzML found for file {0}, PSMs from this file will NOT be localized!", rawfileBase);
+                            continue;
+                        }
+                    }
                     List<MsDataScan> allScans = currentMsDataFile.GetAllScansList();
                     // save scans by scan number, since MGF file from MSFragger does not guarantee all scans will be saved
                     msScans = new();
@@ -132,6 +159,7 @@ namespace PTMLocalization
                         scanPairs = MSFragger_PSMTable.ParseScanPairTable(pairsFile);
                     }
                     currentRawfile = rawfileName;
+                    currentRawfileBase = rawfileBase;
                 }
 
                 // retrieve the right child scan
