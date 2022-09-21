@@ -56,8 +56,11 @@ namespace CMD
             try
             {
                 var task = new Task();
-                task.run_msfragger(settings.productPpmTol, settings.precursorPpmTol, settings.psmFile, settings.scanpairFile, settings.rawfileDirectory, settings.glycoDatabase, settings.maxNumGlycans);
-                Console.WriteLine("Run finished.");
+                errorCode = task.run_msfragger(settings.productPpmTol, settings.precursorPpmTol, settings.psmFile, settings.scanpairFile, settings.rawfileDirectory, settings.glycoDatabase, settings.maxNumGlycans);
+                if (errorCode == 0)
+                {
+                    Console.WriteLine("Run finished.");
+                }
             }
             catch (Exception e)
             {
@@ -110,16 +113,10 @@ namespace CMD
                     return false;
                 }
             }
-            // todo: glyco database parsing/checks
-            //if (settings.glycoDatabase != null)
-            //{
-            //    settings.psmFile = settings.psmFile.Trim();
-            //    if (!Directory.Exists(settings.psmFile))
-            //    {
-            //        Console.WriteLine("Error: PSM file not found at {0}", settings.psmFile);
-            //        return false;
-            //    }
-            //}
+            if (settings.glycoDatabase != null)
+            {
+                settings.glycoDatabase = settings.glycoDatabase.Trim();
+            }
             return true;
         }
 

@@ -20,28 +20,39 @@ namespace PTMLocalization
 {
     public class Task
     {
-        public void run_msfragger(double productPpmTol, double PrecursorPpmTol, string psmFile, string scanpairFile, string rawfileDirectory, string glycoDatabase, int maxNumGlycans)
+        public int run_msfragger(double productPpmTol, double PrecursorPpmTol, string psmFile, string scanpairFile, string rawfileDirectory, string glycoDatabase, int maxNumGlycans)
         {
             Tolerance ProductMassTolerance = new PpmTolerance(productPpmTol);
             Tolerance PrecursorMassTolerance = new PpmTolerance(PrecursorPpmTol);
             if (psmFile == null)
             {
                 Console.WriteLine("No PSM file specified, exiting.");
-                // todo: exit
+                return 2;
             }
-            string _glycodatabase = GlobalVariables.OGlycanLocations.Where(p => p.Contains(glycoDatabase)).First();
 
-            //Tolerance ProductMassTolerance = new PpmTolerance(10);
-            //Tolerance PrecursorMassTolerance = new PpmTolerance(30);
-            //string psmFile = Path.Combine(TestContext.CurrentContext.TestDirectory, @"GlycoTestData\psm.tsv");
-            //string scanpairFile = Path.Combine(TestContext.CurrentContext.TestDirectory, @"GlycoTestData\_scan-pairs.tsv");
-            //string rawfileDirectory = Path.Combine(TestContext.CurrentContext.TestDirectory, @"GlycoTestData");
-            //string glycoDatabase = GlobalVariables.OGlycanLocations.Where(p => p.Contains("OGlycan.gdb")).First();
-            //int maxNumGlycans = 3;
+
+            if (!File.Exists(glycoDatabase))
+            {
+                // read internal databases if not passed a full path
+                try
+                {
+                    glycoDatabase = GlobalVariables.OGlycanLocations.Where(p => p.Contains(glycoDatabase)).First();
+                }
+                catch (Exception ex)
+                {
+                    // file not found - warn user and exit
+                    Console.WriteLine("No Glycan Database found at {0}. Exiting.", glycoDatabase);
+                    return 2;
+                }
+
+            }
+
+            // todo: param
             int[] isotopes = { 0, 1, 2 };
 
-            var localizer = new MSFragger_RunLocalization(psmFile, scanpairFile, rawfileDirectory, _glycodatabase, maxNumGlycans, PrecursorMassTolerance, ProductMassTolerance, isotopes);
+            var localizer = new MSFragger_RunLocalization(psmFile, scanpairFile, rawfileDirectory, glycoDatabase, maxNumGlycans, PrecursorMassTolerance, ProductMassTolerance, isotopes);
             localizer.Localize();
+            return 0;
         }
 
     }
