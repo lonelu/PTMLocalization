@@ -26,10 +26,13 @@ namespace PTMLocalization
         private int[] isotopes;
         
         public static readonly double AveragineIsotopeMass = 1.00235;
-        //public static readonly string OPAIR_HEADERS = "OPair Score\tNumber of Glycans\tTotal Glycan Composition\tGlycan Site Composition(s)\tConfidence Level\tSite Probabilities\t138/144 Ratio";
-        public static readonly string OPAIR_HEADERS = "OPair Score\tNumber of Glycans\tTotal Glycan Composition\tGlycan Site Composition(s)\tConfidence Level\tSite Probabilities";
+        public static readonly string OPAIR_HEADERS = "OPair Score\tNumber of Glycans\tTotal Glycan Composition\tGlycan Site Composition(s)\tConfidence Level\tSite Probabilities\t138/144 Ratio";
+        //public static readonly string OPAIR_HEADERS = "OPair Score\tNumber of Glycans\tTotal Glycan Composition\tGlycan Site Composition(s)\tConfidence Level\tSite Probabilities";
         public static readonly int OUTPUT_LENGTH = OPAIR_HEADERS.Split("\t").Length;
         public static readonly string EMPTY_OUTPUT = String.Join("\t", new string[OUTPUT_LENGTH]);
+
+        private static readonly double OXO138 = 138.05495;
+        private static readonly double OXO144 = 144.06552;
 
         public MSFragger_RunLocalization(string _psmFile, string _scanpairFile, string _rawfilesDirectory, string _o_glycan_database_path, int _maxOGlycansPerPeptide, Tolerance _PrecursorMassTolerance, Tolerance _ProductMassTolerance, int[] _isotopes)
         {
@@ -191,7 +194,7 @@ namespace PTMLocalization
                 else
                 {
                     // no paired child scan found - do not attempt localization
-                    output.Add(PSMtable.editPSMLine(EMPTY_OUTPUT, lineSplits.ToList(), overwritePrevious));
+                    output.Add(PSMtable.editPSMLine("No paired scan" + EMPTY_OUTPUT, lineSplits.ToList(), overwritePrevious));
                     continue;
                 }
 
@@ -214,9 +217,14 @@ namespace PTMLocalization
 
                 // initialize peptide with all non-glyco mods
                 PeptideWithSetModifications peptideWithMods = getPeptideWithMSFraggerMods(assignedMods, peptide);
-                
+
+                // get oxo 138/144 ratio from the HCD scan
+                MsDataScan hcdDataScan = msScans[scanNum];
+                var hcdScan = new Ms2ScanWithSpecificMass(hcdDataScan, precursorMZ, precursorCharge, currentRawfile, 4, 3, neutralExperimentalFragments);
+                double ratio = hcdScan.computeOxoRatio(OXO138, OXO144, ProductMassTolerance.Value);
+
                 // finally, run localizer
-                string localizerOutput = LocalizeOGlyc(scan, peptideWithMods, deltaMass);
+                string localizerOutput = LocalizeOGlyc(scan, peptideWithMods, deltaMass, ratio);
 
                 // write info back to PSM table
                 output.Add(PSMtable.editPSMLine(localizerOutput, lineSplits.ToList(), overwritePrevious));
@@ -231,7 +239,7 @@ namespace PTMLocalization
         /**
          * Single scan O-glycan localization, given a peptide and glycan mass from MSFragger search
          */
-        public string LocalizeOGlyc(Ms2ScanWithSpecificMass ms2Scan, PeptideWithSetModifications peptide, double glycanDeltaMass)
+        public string LocalizeOGlyc(Ms2ScanWithSpecificMass ms2Scan, PeptideWithSetModifications peptide, double glycanDeltaMass, double oxoRatio)
         {
             // generate peptide fragments
             List<Product> products = new List<Product>();
@@ -247,7 +255,7 @@ namespace PTMLocalization
 
             // Get possible O-glycan boxes from delta mass
             List<LocalizationGraph> graphs = new List<LocalizationGraph>();
-            // consider possible precursor isotope errors because we disable precursor correction in MSFragger for easier scan pairing (to the original precursor)
+            // todo: make isotopes a param (scan pairing no longer requires precursor correction to be disabled in MSFragger)
             foreach (int isotope in isotopes)
             {
                 double currentDeltaMass = glycanDeltaMass - (isotope * AveragineIsotopeMass);
@@ -265,6 +273,8 @@ namespace PTMLocalization
                     iDLow++;
                 }
             }
+
+            // save results
             if (graphs.Count == 0)
             {
                 // no matching glycan boxes found to this delta mass, no localization can be done! 
@@ -274,6 +284,7 @@ namespace PTMLocalization
             var gsm = new GlycoSpectralMatch(new List<LocalizationGraph> { best_graph }, GlycoType.OGlycoPep);
             gsm.ScanInfo_p = ms2Scan.TheScan.MassSpectrum.Size * ProductMassTolerance.GetRange(1000).Width / ms2Scan.TheScan.MassSpectrum.Range.Width;
             gsm.Thero_n = products.Count();
+            gsm.oxoRatio = oxoRatio;
             GlycoSite.GlycoLocalizationCalculation(gsm, gsm.GlycanType, DissociationType.HCD, DissociationType.EThcD);
 
             return gsm.WriteLine(null);

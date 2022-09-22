@@ -89,6 +89,8 @@ namespace EngineLayer.GlycoSearch
 
         public List<GlycoSite> LocalizedGlycan { get; set; } 
 
+        public double oxoRatio { get; set; }
+
         #endregion
 
 
@@ -213,8 +215,7 @@ namespace EngineLayer.GlycoSearch
                         LocalizedSiteSpeciLocalInfo(SiteSpeciLocalProb, LocalizedGlycan, OneBasedStartResidueInProtein, GlycanBox.GlobalMixedGlycans, ref local_peptide, ref local_protein);
                     }
 
-                    sb.Append(local_peptide); 
-                    //sb.Append("\t");
+                    sb.Append(local_peptide); sb.Append("\t");
                     //sb.Append(local_protein); sb.Append("\t");
 
                     //sb.Append(AllLocalizationInfo(Routes)); sb.Append("\t");
@@ -229,6 +230,7 @@ namespace EngineLayer.GlycoSearch
                     //sb.Append("\t");
                     //sb.Append("\t");
                 }
+                sb.Append(oxoRatio);
             }
             return sb.ToString();
         }

@@ -31,6 +31,42 @@ namespace EngineLayer
             }
         }
 
+        /**
+         * Compute oxonium intensity ratio (e.g. 138/144) for this scan. Ratio computed as sum of all peak intensities within m/z
+         * tolerance, rather than only nearest peak. 
+         */
+        public double computeOxoRatio(double numeratorMass, double denominatorMass, double tolerancePPM)
+        {
+            double ratio = 0;
+            double numerator = 0;
+            double denominator = 0;
+            double maxMass = Math.Max(numeratorMass, denominatorMass) + Math.Max(numeratorMass, denominatorMass) * tolerancePPM * 0.000_001;
+            double numeratorPPMrange = tolerancePPM * 0.000_001 * numeratorMass;
+            double denominatorPPMrange = tolerancePPM * 0.000_001 * denominatorMass;
+
+            for (int i = 0; i < TheScan.MassSpectrum.XArray.Length; i++)
+            {
+                if (TheScan.MassSpectrum.XArray[i] > maxMass)
+                {
+                    break;
+                }
+                if (Math.Abs(TheScan.MassSpectrum.XArray[i] - numeratorMass) < numeratorPPMrange)
+                {
+                    numerator += TheScan.MassSpectrum.YArray[i];
+                }
+                if (Math.Abs(TheScan.MassSpectrum.XArray[i] - denominatorMass) < denominatorPPMrange)
+                {
+                    denominator += TheScan.MassSpectrum.YArray[i];
+                }
+            }
+            if (denominator > 0)
+            {
+                ratio = numerator / denominator;
+            } 
+            return ratio;
+        }
+
+
         public MsDataScan TheScan { get; }
         public double PrecursorMonoisotopicPeakMz { get; }
         public double PrecursorMass { get; }
