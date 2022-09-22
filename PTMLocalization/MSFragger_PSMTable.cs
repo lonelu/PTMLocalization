@@ -115,5 +115,29 @@ namespace PTMLocalization
             PeptideWithSetModifications finalPeptide = new PeptideWithSetModifications(peptideWithMods, modDefinitions);
             return finalPeptide;
         }
+
+        /**
+         * Insert the provided OPair output into the PSM line at the set insertion point, OR, overwrite the existing OPair
+         * output if present. 
+         */
+        public string editPSMLine(string localizerOutput, List<string> existingPSMline, bool overwritePrevious)
+        {
+            int insertIndex = GetColumnIndex("Observed Modifications") + 1;
+
+            if (!overwritePrevious)
+            {
+                existingPSMline.InsertRange(insertIndex, localizerOutput.Split("\t"));
+            }
+            else
+            {
+                // previous scan data exists - overwrite it
+                string[] localizerOutputEntries = localizerOutput.Split("\t");
+                for (int i = 0; i < localizerOutputEntries.Length; i++)     // assumes same length localizer output as before
+                {
+                    existingPSMline[insertIndex + i] = localizerOutputEntries[i];
+                }
+            }
+            return String.Join("\t", existingPSMline);
+        }
     }
 }

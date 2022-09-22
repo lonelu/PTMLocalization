@@ -140,8 +140,8 @@ namespace EngineLayer.GlycoSearch
                 var peptide_site = loc.ModSite - 1;
                 local += "[" + peptide_site + "," + globalGlycans[loc.GlycanID].Composition + "," + x.ToString("0.000") + "]";
 
-                var protein_site = OneBasedStartResidueInProtein.HasValue ? OneBasedStartResidueInProtein.Value + loc.ModSite - 2 : -1;
-                local_protein += "[" + protein_site + "," + globalGlycans[loc.GlycanID].Composition + "," + x.ToString("0.000") + "]";
+                //var protein_site = OneBasedStartResidueInProtein.HasValue ? OneBasedStartResidueInProtein.Value + loc.ModSite - 2 : -1;
+                //local_protein += "[" + protein_site + "," + globalGlycans[loc.GlycanID].Composition + "," + x.ToString("0.000") + "]";
             }
 
         }
@@ -182,19 +182,15 @@ namespace EngineLayer.GlycoSearch
 
                 sb.Append(glycanBox.ModCount + "\t");
 
-                sb.Append(LocalizationGraphs.First().ModPos.Length + "\t");
+                //sb.Append(LocalizationGraphs.First().ModPos.Length + "\t");
 
-                sb.Append(glycanBox.Mass + "\t");
+                //sb.Append(glycanBox.Mass + "\t");
 
                 sb.Append(Glycan.GetKindString(glycanBox.Kind)); sb.Append("\t");
 
                 //Get glycans
                 var glycans = GetFirstGraphGlycans(this, glycanBox);
 
-                //if (glycans.First().Struc!=null)
-                //{
-                //    sb.Append(string.Join(",", glycans.Select(p => p.Struc.ToString()).ToArray())); 
-                //}
                 sb.Append(string.Join(",", glycans.Select(p => p.Composition).ToArray()));
                 sb.Append("\t");
 
@@ -217,20 +213,21 @@ namespace EngineLayer.GlycoSearch
                         LocalizedSiteSpeciLocalInfo(SiteSpeciLocalProb, LocalizedGlycan, OneBasedStartResidueInProtein, GlycanBox.GlobalMixedGlycans, ref local_peptide, ref local_protein);
                     }
 
-                    sb.Append(local_peptide); sb.Append("\t");
-                    sb.Append(local_protein); sb.Append("\t");
+                    sb.Append(local_peptide); 
+                    //sb.Append("\t");
+                    //sb.Append(local_protein); sb.Append("\t");
 
-                    sb.Append(AllLocalizationInfo(Routes)); sb.Append("\t");
+                    //sb.Append(AllLocalizationInfo(Routes)); sb.Append("\t");
 
-                    sb.Append(SiteSpeciLocalInfo(SiteSpeciLocalProb)); sb.Append("\t");
+                    //sb.Append(SiteSpeciLocalInfo(SiteSpeciLocalProb)); sb.Append("\t");
                 }
                 else
                 {
                     sb.Append(LocalizationLevel); sb.Append("\t");
-                    sb.Append("\t");
-                    sb.Append("\t");
-                    sb.Append("\t");
-                    sb.Append("\t");
+                    //sb.Append("\t");
+                    //sb.Append("\t");
+                    //sb.Append("\t");
+                    //sb.Append("\t");
                 }
             }
             return sb.ToString();

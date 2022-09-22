@@ -26,8 +26,10 @@ namespace PTMLocalization
         private int[] isotopes;
         
         public static readonly double AveragineIsotopeMass = 1.00235;
-        public static readonly string OPAIR_HEADERS = "OPair Score\tNumber of Glycans\tNum Possible Glycosites\tGlycan Mass\tTotal Glycan Comp\tGlycan Site Comp(s)\tConfidence Level\tSite Probabilities\t(site probs 2?)\tBest Route\tAll Routes";
-        private int outputLength;
+        //public static readonly string OPAIR_HEADERS = "OPair Score\tNumber of Glycans\tTotal Glycan Composition\tGlycan Site Composition(s)\tConfidence Level\tSite Probabilities\t138/144 Ratio";
+        public static readonly string OPAIR_HEADERS = "OPair Score\tNumber of Glycans\tTotal Glycan Composition\tGlycan Site Composition(s)\tConfidence Level\tSite Probabilities";
+        public static readonly int OUTPUT_LENGTH = OPAIR_HEADERS.Split("\t").Length;
+        public static readonly string EMPTY_OUTPUT = String.Join("\t", new string[OUTPUT_LENGTH]);
 
         public MSFragger_RunLocalization(string _psmFile, string _scanpairFile, string _rawfilesDirectory, string _o_glycan_database_path, int _maxOGlycansPerPeptide, Tolerance _PrecursorMassTolerance, Tolerance _ProductMassTolerance, int[] _isotopes)
         {
@@ -40,7 +42,6 @@ namespace PTMLocalization
             maxOGlycansPerPeptide = _maxOGlycansPerPeptide;
             isotopes = _isotopes;
 
-            outputLength = OPAIR_HEADERS.Split("\t").Length;
             Setup();
         }
 
@@ -83,11 +84,10 @@ namespace PTMLocalization
                 // overwriting previous OP results, don't add new columns
                 output.Add(String.Join("\t", PSMtable.Headers));
                 overwritePrevious = true;
-            } else
+            } 
+            else
             {
-                List<string> newHeaders = PSMtable.Headers.ToList();
-                newHeaders.Add(OPAIR_HEADERS);
-                output.Add(String.Join("\t", newHeaders));
+                output.Add(PSMtable.editPSMLine(OPAIR_HEADERS, PSMtable.Headers.ToList(), overwritePrevious));
             }
 
             Dictionary<string, bool> mgfNotFoundWarnings = new ();
@@ -118,7 +118,7 @@ namespace PTMLocalization
                 if (deltaMass < 3.5 && deltaMass > -1.5)
                 {
                     // unmodified peptide - no localization
-                    output.Add(PSMline);
+                    output.Add(PSMtable.editPSMLine(EMPTY_OUTPUT, lineSplits.ToList(), overwritePrevious));
                     continue;
                 }
 
@@ -160,7 +160,7 @@ namespace PTMLocalization
                                 Console.WriteLine("Warning: no MGF or mzML found for file {0}, PSMs from this file will NOT be localized!", rawfileBase);
                                 mzmlNotFoundWarnings.Add(rawfileBase, true);
                             }
-                            output.Add(PSMline);
+                            output.Add(PSMtable.editPSMLine(EMPTY_OUTPUT, lineSplits.ToList(), overwritePrevious));
                             continue;
                         }
                     }
@@ -191,7 +191,7 @@ namespace PTMLocalization
                 else
                 {
                     // no paired child scan found - do not attempt localization
-                    output.Add(PSMline);
+                    output.Add(PSMtable.editPSMLine(EMPTY_OUTPUT, lineSplits.ToList(), overwritePrevious));
                     continue;
                 }
 
@@ -204,7 +204,7 @@ namespace PTMLocalization
                 catch (KeyNotFoundException)
                 {
                     Console.Out.WriteLine(String.Format("Error: MS2 scan {0} not found in the MGF file. No localization performed", childScanNum));
-                    output.Add(PSMline);
+                    output.Add(PSMtable.editPSMLine(EMPTY_OUTPUT, lineSplits.ToList(), overwritePrevious));
                     continue;
                 }
 
@@ -219,22 +219,7 @@ namespace PTMLocalization
                 string localizerOutput = LocalizeOGlyc(scan, peptideWithMods, deltaMass);
 
                 // write info back to PSM table
-                List<string> psmLineData = lineSplits.ToList();
-                if (!overwritePrevious)
-                {
-                    psmLineData.Add(localizerOutput);
-                } 
-                else
-                {
-                    // previous scan data exists - overwrite it
-                    string[] localizerOutputEntries = localizerOutput.Split("\t");
-                    int startPos = psmLineData.Count - localizerOutputEntries.Length;      // assumes same length localizer output as before
-                    for (int i=0; i < localizerOutputEntries.Length; i++)
-                    {
-                        psmLineData[startPos + i] = localizerOutputEntries[i];
-                    }
-                }
-                output.Add(String.Join("\t", psmLineData));
+                output.Add(PSMtable.editPSMLine(localizerOutput, lineSplits.ToList(), overwritePrevious));
             }
             // write output to PSM table
             File.WriteAllLines(psmFile, output.ToArray());
@@ -283,7 +268,7 @@ namespace PTMLocalization
             if (graphs.Count == 0)
             {
                 // no matching glycan boxes found to this delta mass, no localization can be done! 
-                return "No match to glycan delta mass" + string.Concat(Enumerable.Repeat("\t", outputLength));      // the psm line the same length as all other outputs
+                return "No match to glycan delta mass" + EMPTY_OUTPUT;      // keep the psm line the same length as all other outputs
             }
             var best_graph = graphs.OrderByDescending(p => p.TotalScore).First();
             var gsm = new GlycoSpectralMatch(new List<LocalizationGraph> { best_graph }, GlycoType.OGlycoPep);
