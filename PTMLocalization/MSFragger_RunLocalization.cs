@@ -91,8 +91,23 @@ namespace PTMLocalization
             }
 
             Dictionary<string, bool> mgfNotFoundWarnings = new ();
+            Dictionary<string, bool> mzmlNotFoundWarnings = new();
+            // timers and etc
+            System.Diagnostics.Stopwatch timer = new System.Diagnostics.Stopwatch();
+            System.Diagnostics.Stopwatch totalTimer = new System.Diagnostics.Stopwatch();
+            timer.Start();
+            totalTimer.Start();
+            int psmCount = 0;
+
             foreach (string PSMline in PSMtable.PSMdata)
             {
+                if (timer.ElapsedMilliseconds > 10000)
+                {
+                    Console.Write("\r\tprogress: {0}/{1} PSMs processed in {2:0.0} s", psmCount, PSMtable.PSMdata.Count, totalTimer.ElapsedMilliseconds * 0.001);
+                    timer.Restart();
+                }
+                psmCount++;
+
                 // Parse PSM information
                 string[] lineSplits = PSMline.Split("\t");
                 string spectrumString = lineSplits[PSMtable.SpectrumCol];
@@ -140,7 +155,12 @@ namespace PTMLocalization
                         } 
                         else 
                         {
-                            Console.WriteLine("Warning: no MGF or mzML found for file {0}, PSMs from this file will NOT be localized!", rawfileBase);
+                            if (!mzmlNotFoundWarnings.ContainsKey(rawfileBase))
+                            {
+                                Console.WriteLine("Warning: no MGF or mzML found for file {0}, PSMs from this file will NOT be localized!", rawfileBase);
+                                mzmlNotFoundWarnings.Add(rawfileBase, true);
+                            }
+                            output.Add(PSMline);
                             continue;
                         }
                     }
@@ -218,6 +238,8 @@ namespace PTMLocalization
             }
             // write output to PSM table
             File.WriteAllLines(psmFile, output.ToArray());
+            totalTimer.Stop();
+            Console.WriteLine("\nFinished localization in {0:0.0} s", totalTimer.ElapsedMilliseconds * 0.001);
         }
 
 
