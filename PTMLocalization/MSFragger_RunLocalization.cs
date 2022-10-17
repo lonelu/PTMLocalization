@@ -26,10 +26,11 @@ namespace PTMLocalization
         private int[] isotopes;
         
         public static readonly double AveragineIsotopeMass = 1.00235;
-        public static readonly string OPAIR_HEADERS = "OPair Score\tNumber of Glycans\tTotal Glycan Composition\tGlycan Site Composition(s)\tConfidence Level\tSite Probabilities\t138/144 Ratio";
+        public static readonly string OPAIR_HEADERS = "OPair Score\tNumber of Glycans\tTotal Glycan Composition\tGlycan Site Composition(s)\tConfidence Level\tSite Probabilities\t138/144 Ratio\tPaired Scan Num";
         //public static readonly string OPAIR_HEADERS = "OPair Score\tNumber of Glycans\tTotal Glycan Composition\tGlycan Site Composition(s)\tConfidence Level\tSite Probabilities";
         public static readonly int OUTPUT_LENGTH = OPAIR_HEADERS.Split("\t").Length;
         public static readonly string EMPTY_OUTPUT = String.Join("\t", new string[OUTPUT_LENGTH]);
+        public static readonly string EMPTY_OUTPUT_WITH_PAIRED_SCAN = String.Join("\t", new string[OUTPUT_LENGTH - 1]);
 
         private static readonly string CAL_INPUT_EXTENSION = "_calibrated.mzML";
         private static readonly string CAL_INPUT_EXTENSION_FALLBACK = "_calibrated.MGF";
@@ -289,7 +290,7 @@ namespace PTMLocalization
             if (graphs.Count == 0)
             {
                 // no matching glycan boxes found to this delta mass, no localization can be done! 
-                return "No match to glycan delta mass" + EMPTY_OUTPUT;      // keep the psm line the same length as all other outputs
+                return "No match to glycan delta mass" + EMPTY_OUTPUT_WITH_PAIRED_SCAN + string.Format("\t{0}", ms2Scan.TheScan.OneBasedScanNumber);      // keep the psm line the same length as all other outputs
             }
             var best_graph = graphs.OrderByDescending(p => p.TotalScore).First();
             var gsm = new GlycoSpectralMatch(new List<LocalizationGraph> { best_graph }, GlycoType.OGlycoPep);
@@ -298,7 +299,7 @@ namespace PTMLocalization
             gsm.oxoRatio = oxoRatio;
             GlycoSite.GlycoLocalizationCalculation(gsm, gsm.GlycanType, DissociationType.HCD, DissociationType.EThcD);
 
-            return gsm.WriteLine(null);
+            return gsm.WriteLine(null) + string.Format("\t{0}", ms2Scan.TheScan.OneBasedScanNumber);
         }
 
         /**
