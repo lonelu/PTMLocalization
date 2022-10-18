@@ -94,7 +94,10 @@ namespace PTMLocalization
             } 
             else
             {
-                output.Add(PSMtable.editPSMLine(OPAIR_HEADERS, PSMtable.Headers.ToList(), overwritePrevious));
+                // write headers to PSM table
+                GlycoSpectralMatch emptyMatch = new GlycoSpectralMatch();
+                emptyMatch.localizerOutput = OPAIR_HEADERS;
+                output.Add(PSMtable.editPSMLine(emptyMatch, PSMtable.Headers.ToList(), overwritePrevious, false));
             }
 
             Dictionary<string, bool> mgfNotFoundWarnings = new ();
@@ -125,7 +128,9 @@ namespace PTMLocalization
                 if (deltaMass < 3.5 && deltaMass > -1.5)
                 {
                     // unmodified peptide - no localization
-                    output.Add(PSMtable.editPSMLine(EMPTY_OUTPUT, lineSplits.ToList(), overwritePrevious));
+                    GlycoSpectralMatch emptyGSM = new GlycoSpectralMatch();
+                    emptyGSM.localizerOutput = EMPTY_OUTPUT;
+                    output.Add(PSMtable.editPSMLine(emptyGSM, lineSplits.ToList(), overwritePrevious, false));
                     continue;
                 }
 
@@ -192,7 +197,9 @@ namespace PTMLocalization
                                 Console.WriteLine("Warning: no MGF or mzML found for file {0}, PSMs from this file will NOT be localized!", rawfileBase);
                                 mzmlNotFoundWarnings.Add(rawfileBase, true);
                             }
-                            output.Add(PSMtable.editPSMLine(EMPTY_OUTPUT, lineSplits.ToList(), overwritePrevious));
+                            GlycoSpectralMatch emptyGSM = new GlycoSpectralMatch();
+                            emptyGSM.localizerOutput = EMPTY_OUTPUT;
+                            output.Add(PSMtable.editPSMLine(emptyGSM, lineSplits.ToList(), overwritePrevious, false));
                             continue;
                         }
                     }
@@ -223,7 +230,9 @@ namespace PTMLocalization
                 else
                 {
                     // no paired child scan found - do not attempt localization
-                    output.Add(PSMtable.editPSMLine("No paired scan" + EMPTY_OUTPUT, lineSplits.ToList(), overwritePrevious));
+                    GlycoSpectralMatch emptyGSM = new GlycoSpectralMatch();
+                    emptyGSM.localizerOutput = "No paired scan" + EMPTY_OUTPUT;
+                    output.Add(PSMtable.editPSMLine(emptyGSM, lineSplits.ToList(), overwritePrevious, false));
                     continue;
                 }
 
@@ -236,7 +245,9 @@ namespace PTMLocalization
                 catch (KeyNotFoundException)
                 {
                     Console.Out.WriteLine(String.Format("Error: MS2 scan {0} not found in the MGF file. No localization performed", childScanNum));
-                    output.Add(PSMtable.editPSMLine(EMPTY_OUTPUT, lineSplits.ToList(), overwritePrevious));
+                    GlycoSpectralMatch emptyGSM = new GlycoSpectralMatch();
+                    emptyGSM.localizerOutput = EMPTY_OUTPUT;
+                    output.Add(PSMtable.editPSMLine(emptyGSM, lineSplits.ToList(), overwritePrevious, false));
                     continue;
                 }
 
@@ -262,10 +273,10 @@ namespace PTMLocalization
                 }
 
                 // finally, run localizer
-                string localizerOutput = LocalizeOGlyc(scan, peptideWithMods, deltaMass, ratio);
+                GlycoSpectralMatch gsm = LocalizeOGlyc(scan, peptideWithMods, deltaMass, ratio);
 
                 // write info back to PSM table
-                output.Add(PSMtable.editPSMLine(localizerOutput, lineSplits.ToList(), overwritePrevious));
+                output.Add(PSMtable.editPSMLine(gsm, lineSplits.ToList(), overwritePrevious, true));
             }
             // write output to PSM table
             File.WriteAllLines(psmFile, output.ToArray());
@@ -277,7 +288,7 @@ namespace PTMLocalization
         /**
          * Single scan O-glycan localization, given a peptide and glycan mass from MSFragger search
          */
-        public string LocalizeOGlyc(Ms2ScanWithSpecificMass ms2Scan, PeptideWithSetModifications peptide, double glycanDeltaMass, double oxoRatio)
+        public GlycoSpectralMatch LocalizeOGlyc(Ms2ScanWithSpecificMass ms2Scan, PeptideWithSetModifications peptide, double glycanDeltaMass, double oxoRatio)
         {
             // generate peptide fragments
             List<Product> products = new List<Product>();
@@ -314,19 +325,24 @@ namespace PTMLocalization
             }
 
             // save results
+            GlycoSpectralMatch gsm;
             if (graphs.Count == 0)
             {
                 // no matching glycan boxes found to this delta mass, no localization can be done! 
-                return "No match to glycan delta mass" + EMPTY_OUTPUT_WITH_PAIRED_SCAN + string.Format("\t{0}", ms2Scan.TheScan.OneBasedScanNumber);      // keep the psm line the same length as all other outputs
+                gsm = new GlycoSpectralMatch();
+                // keep the psm line the same length as all other outputs
+                gsm.localizerOutput = "No match to glycan delta mass" + EMPTY_OUTPUT_WITH_PAIRED_SCAN + string.Format("\t{0}", ms2Scan.TheScan.OneBasedScanNumber);
+                return gsm;      
             }
             var best_graph = graphs.OrderByDescending(p => p.TotalScore).First();
-            var gsm = new GlycoSpectralMatch(new List<LocalizationGraph> { best_graph }, GlycoType.OGlycoPep);
+            gsm = new GlycoSpectralMatch(new List<LocalizationGraph> { best_graph }, GlycoType.OGlycoPep);
             gsm.ScanInfo_p = ms2Scan.TheScan.MassSpectrum.Size * ProductMassTolerance.GetRange(1000).Width / ms2Scan.TheScan.MassSpectrum.Range.Width;
             gsm.Thero_n = products.Count();
             gsm.oxoRatio = oxoRatio;
             GlycoSite.GlycoLocalizationCalculation(gsm, gsm.GlycanType, DissociationType.HCD, DissociationType.EThcD);
+            gsm.localizerOutput = gsm.WriteLine(null) + string.Format("\t{0}", ms2Scan.TheScan.OneBasedScanNumber);
 
-            return gsm.WriteLine(null) + string.Format("\t{0}", ms2Scan.TheScan.OneBasedScanNumber);
+            return gsm;
         }
 
         /**

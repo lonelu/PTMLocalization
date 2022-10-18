@@ -24,6 +24,8 @@ namespace EngineLayer.GlycoSearch
         public List<int> ModPos { get; set; }
         public LocalizationLevel LocalizationLevel { get; set; }
 
+        public string localizerOutput { get; set; }
+
         public static GlycanBox GetFirstGraphGlycanBox(GlycoSpectralMatch gsm)
         {
 

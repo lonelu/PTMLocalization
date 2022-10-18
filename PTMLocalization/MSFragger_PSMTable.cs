@@ -1,4 +1,5 @@
-﻿using Proteomics.ProteolyticDigestion;
+﻿using EngineLayer.GlycoSearch;
+using Proteomics.ProteolyticDigestion;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -26,6 +27,7 @@ namespace PTMLocalization
             DeltaMassCol = GetColumnIndex("Delta Mass");
             AssignedModCol = GetColumnIndex("Assigned Modifications");
             PeptideCol = GetColumnIndex("Peptide");
+            ModifiedPeptideCol = GetColumnIndex("Modified Peptide");
             SpectrumCol = GetColumnIndex("Spectrum");
             ObservedModCol = GetColumnIndex("Observed Modifications");
             int calMZCol = GetColumnIndex("Calibrated Observed M/Z");
@@ -46,6 +48,7 @@ namespace PTMLocalization
         public int DeltaMassCol { get; set; }
         public int AssignedModCol { get; set; }
         public int PeptideCol { get; set; }
+        public int ModifiedPeptideCol { get; set; }
         public int SpectrumCol { get; set; }
         public int ObservedModCol { get; set; }
         public int PrecursorMZCol { get; set; }
@@ -127,24 +130,67 @@ namespace PTMLocalization
          * Insert the provided OPair output into the PSM line at the set insertion point, OR, overwrite the existing OPair
          * output if present. 
          */
-        public string editPSMLine(string localizerOutput, List<string> existingPSMline, bool overwritePrevious)
+        public string editPSMLine(GlycoSpectralMatch gsm, List<string> existingPSMline, bool overwritePrevious, bool writeToAssignedMods)
         {
             int insertIndex = GetColumnIndex("Observed Modifications") + 1;
 
             if (!overwritePrevious)
             {
-                existingPSMline.InsertRange(insertIndex, localizerOutput.Split("\t"));
+                existingPSMline.InsertRange(insertIndex, gsm.localizerOutput.Split("\t"));
             }
             else
             {
                 // previous scan data exists - overwrite it
-                string[] localizerOutputEntries = localizerOutput.Split("\t");
+                string[] localizerOutputEntries = gsm.localizerOutput.Split("\t");
                 for (int i = 0; i < localizerOutputEntries.Length; i++)     // assumes same length localizer output as before
                 {
                     existingPSMline[insertIndex + i] = localizerOutputEntries[i];
                 }
             }
+
+            // also edit Assigned Modifications (and modified peptide) if requested
+            if (writeToAssignedMods)
+            {
+                // localization only present for localization levels 1 & 2
+                if (int.Parse(gsm.LocalizationLevel.ToString()) < 3)
+                {
+                    List<string> newAssignedMods = new List<string>();
+                    // read existing assigned mods
+                    string[] prevAssignedMods = existingPSMline[AssignedModCol].Split(",");
+                    int[] prevModSites = new int[prevAssignedMods.Length];
+                    double[] prevModMasses = new double[prevAssignedMods.Length];
+                    for (int i = 0; i < prevAssignedMods.Length; i++)
+                    {
+                        // mod format is "1C(57.02146)", for example (site, residue, & mass)
+                        string siteAndResidue = prevAssignedMods[i].Split("(")[0];
+                        int site = int.Parse(siteAndResidue.Substring(0, siteAndResidue.Length - 1));
+                        prevModSites[i] = site;
+                        double mass = double.Parse(prevAssignedMods[i].Split("(")[1].Replace(")", ""));
+                        prevModMasses[i] = mass;
+                    }
+
+                    // check new OPair mods
+                    foreach (var loc in gsm.LocalizedGlycan.Where(p => p.IsLocalized))
+                    {
+                        var peptide_site = loc.ModSite - 1;
+                        var comp = EngineLayer.GlycanBox.GlobalOGlycans[loc.GlycanID].Composition;
+                        string formattedComp = opairCompToMSFragger(comp);
+                        double mass = EngineLayer.GlycanBox.GlobalOGlycans[loc.GlycanID].Mass;
+                        if (!prevModSites.Contains(peptide_site))
+                        {
+                            // add new assigned modification
+                            newAssignedMods.Add(string.Format("{0}{1}({2})"), peptide_site, , mass);
+                        }
+                    }
+                }
+            }
+
             return String.Join("\t", existingPSMline);
+        }
+
+        public static string opairCompToMSFragger(string inputComp)
+        {
+
         }
     }
 }
