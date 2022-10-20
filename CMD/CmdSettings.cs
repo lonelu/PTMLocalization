@@ -26,6 +26,12 @@ namespace CMD
         [Option('n', Default = 3, HelpText = "[Optional] maxNumGlycans ")]
         public int maxNumGlycans { get; set; }
 
+        [Option('i', Default = 0, HelpText = "[Optional] minIsotopeError ")]
+        public int minIsotopeError { get; set; }
+
+        [Option('j', Default = 2, HelpText = "[Optional] maxIsotopeError ")]
+        public int maxIsotopeError { get; set; }
+
         [Option('d', HelpText = "[Optional] rawfileDirectory")]
         public string rawfileDirectory { get; set; }
 
@@ -47,6 +53,8 @@ namespace CMD
 
             x += " -g " + glycoDatabase;
             x += " -n " + maxNumGlycans.ToString();
+            x += " -i " + minIsotopeError.ToString(); 
+            x += " -j " + maxIsotopeError.ToString();
             x += " -d " + rawfileDirectory;
             x += " -s " + psmFile;
             x += " -p " + scanpairFile;

@@ -20,7 +20,7 @@ namespace PTMLocalization
 {
     public class Task
     {
-        public int run_msfragger(double productPpmTol, double PrecursorPpmTol, string psmFile, string scanpairFile, string rawfileDirectory, string glycoDatabase, int maxNumGlycans)
+        public int run_msfragger(double productPpmTol, double PrecursorPpmTol, string psmFile, string scanpairFile, string rawfileDirectory, string glycoDatabase, int maxNumGlycans, int minIsotopeError, int maxIsotopeError)
         {
             Tolerance ProductMassTolerance = new PpmTolerance(productPpmTol);
             Tolerance PrecursorMassTolerance = new PpmTolerance(PrecursorPpmTol);
@@ -47,8 +47,11 @@ namespace PTMLocalization
 
             }
 
-            // todo: param
-            int[] isotopes = { 0, 1, 2 };
+            int[] isotopes = new int[maxIsotopeError - minIsotopeError + 1];
+            for (int i = 0; i < isotopes.Length; i++)
+            {
+                isotopes[i] = minIsotopeError + i;
+            }
 
             var localizer = new MSFragger_RunLocalization(psmFile, scanpairFile, rawfileDirectory, glycoDatabase, maxNumGlycans, PrecursorMassTolerance, ProductMassTolerance, isotopes);
             localizer.Localize();
