@@ -82,7 +82,7 @@ namespace PTMLocalization
             MSFragger_PSMTable PSMtable = new(psmFile);
             string currentRawfile = "";
             string currentRawfileBase = "";
-            MsDataFile currentMsDataFile;
+            MsDataFile currentMsDataFile = null;
             Dictionary<int, MsDataScan> msScans = new();
             List<string> output = new();
             bool overwritePrevious = false;
@@ -143,7 +143,14 @@ namespace PTMLocalization
                     FilteringParams filter = new FilteringParams();
                     if (File.Exists(spectraFile))
                     {
-                        currentMsDataFile = Mzml.LoadAllStaticData(spectraFile, filter);
+                        try
+                        {
+                            currentMsDataFile = Mzml.LoadAllStaticData(spectraFile, filter);
+                        } 
+                        catch
+                        {
+                            currentMsDataFile = null;
+                        }
                     } 
                     else if (File.Exists(Path.Combine(rawfilesDirectory, rawfileBase + CAL_INPUT_EXTENSION_FALLBACK)))
                     {
@@ -151,11 +158,18 @@ namespace PTMLocalization
                         spectraFile = Path.Combine(rawfilesDirectory, rawfileBase + CAL_INPUT_EXTENSION_FALLBACK);
                         filter = new FilteringParams();
                         Console.WriteLine("Calibrated mzML not found, using calibrated MGF for file {0}", rawfileBase);
-                        currentMsDataFile = Mgf.LoadAllStaticData(spectraFile, filter);
+                        try { 
+                            currentMsDataFile = Mgf.LoadAllStaticData(spectraFile, filter);
+                        }
+                        catch
+                        {
+                            currentMsDataFile = null;
+                        }
                     }
-                    else
+                    
+                    if (currentMsDataFile is null)
                     {
-                        // no calibrated file (mzML/MGF) found, try falling back to raw mzML
+                        // no calibrated file (mzML/MGF) found (or loading failed), try falling back to raw mzML
                         rawfileName = rawfileBase + ".mzML";
                         spectraFile = Path.Combine(rawfilesDirectory, rawfileName);
                         if (File.Exists(spectraFile))
@@ -164,7 +178,7 @@ namespace PTMLocalization
                             // warn user that MGF wasn't found for this raw file if we haven't already done so
                             if (!mgfNotFoundWarnings.ContainsKey(rawfileBase))
                             {
-                                Console.WriteLine("Warning: calibrated file not found for raw file {0}, uncalibrated mzML will be used", rawfileBase);
+                                Console.WriteLine("Warning: calibrated file not found or not loaded for raw file {0}, uncalibrated mzML will be used", rawfileBase);
                                 mgfNotFoundWarnings.Add(rawfileBase, true);
                             }
                         } 
