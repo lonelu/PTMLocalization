@@ -281,12 +281,13 @@ namespace PTMLocalization
 
             // Get possible O-glycan boxes from delta mass
             List<LocalizationGraph> graphs = new List<LocalizationGraph>();
-            // todo: make isotopes a param (scan pairing no longer requires precursor correction to be disabled in MSFragger)
             foreach (int isotope in isotopes)
             {
-                double currentDeltaMass = glycanDeltaMass - (isotope * AveragineIsotopeMass);
-                var possibleGlycanMassLow = PrecursorMassTolerance.GetMinimumValue(currentDeltaMass);
-                var possibleGlycanMassHigh = PrecursorMassTolerance.GetMaximumValue(currentDeltaMass);
+                // include peptide mass for PPM calculation between precursor and glycan delta mass
+                double currentDeltaMass = glycanDeltaMass - (isotope * AveragineIsotopeMass) + peptide.MonoisotopicMass;
+                double maxMassErrorDa = currentDeltaMass * 0.000001 * PrecursorMassTolerance.Value;
+                var possibleGlycanMassLow = currentDeltaMass - maxMassErrorDa - peptide.MonoisotopicMass;   // subtract peptide mass to get final glycan-only mass
+                var possibleGlycanMassHigh = currentDeltaMass + maxMassErrorDa - peptide.MonoisotopicMass;
                 int iDLow = GlycoPeptides.BinarySearchGetIndex(GlycanBox.OGlycanBoxes.Select(p => p.Mass).ToArray(), possibleGlycanMassLow);
 
                 while (iDLow < GlycanBox.OGlycanBoxes.Length && GlycanBox.OGlycanBoxes[iDLow].Mass <= possibleGlycanMassHigh)
