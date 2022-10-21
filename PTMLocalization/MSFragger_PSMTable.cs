@@ -90,7 +90,14 @@ namespace PTMLocalization
             foreach (string line in allLines)
             {
                 string[] splits = line.Split('\t');
-                scanPairs.Add(Int32.Parse(splits[0]), Int32.Parse(splits[1]));
+                try
+                {
+                    scanPairs.Add(Int32.Parse(splits[0]), Int32.Parse(splits[1]));
+                } catch (ArgumentException)
+                {
+                    // multiple paired scans for this parent scan. Only take the first one
+                    continue;
+                }
             }
             return scanPairs;
         }
