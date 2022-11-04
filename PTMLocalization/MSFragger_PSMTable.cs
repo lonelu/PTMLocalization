@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace PTMLocalization
@@ -14,7 +15,7 @@ namespace PTMLocalization
      */
     public class MSFragger_PSMTable
     {
-
+        private static readonly string modSitePattern = "([0-9]+)";
         public MSFragger_PSMTable(string FilePath)
         {
             this.FilePath = FilePath;
@@ -152,34 +153,58 @@ namespace PTMLocalization
             if (writeToAssignedMods)
             {
                 // localization only present for localization levels 1 & 2
-                if (int.Parse(gsm.LocalizationLevel.ToString()) < 3)
+                if ((int) gsm.LocalizationLevel < 3)
                 {
+                    string peptide = existingPSMline[PeptideCol];
                     List<string> newAssignedMods = new List<string>();
                     // read existing assigned mods
-                    string[] prevAssignedMods = existingPSMline[AssignedModCol].Split(",");
-                    int[] prevModSites = new int[prevAssignedMods.Length];
-                    double[] prevModMasses = new double[prevAssignedMods.Length];
-                    for (int i = 0; i < prevAssignedMods.Length; i++)
-                    {
-                        // mod format is "1C(57.02146)", for example (site, residue, & mass)
-                        string siteAndResidue = prevAssignedMods[i].Split("(")[0];
-                        int site = int.Parse(siteAndResidue.Substring(0, siteAndResidue.Length - 1));
-                        prevModSites[i] = site;
-                        double mass = double.Parse(prevAssignedMods[i].Split("(")[1].Replace(")", ""));
-                        prevModMasses[i] = mass;
+                    string prevAssignedModsStr = existingPSMline[AssignedModCol];
+                    int[] prevModSites;
+                    if (prevAssignedModsStr.Length > 0) {
+                        string[] prevAssignedMods = prevAssignedModsStr.Split(",");
+                        prevModSites = new int[prevAssignedMods.Length];
+                        double[] prevModMasses = new double[prevAssignedMods.Length];
+                        for (int i = 0; i < prevAssignedMods.Length; i++)
+                        {
+                            // mod format is "1C(57.02146)", for example (site, residue, & mass)
+                            string siteAndResidue = prevAssignedMods[i].Split("(")[0];
+                            var matches = Regex.Matches(siteAndResidue, modSitePattern);
+                            int site = int.Parse(matches[0].Groups[1].Value);
+                            prevModSites[i] = site;
+                            double mass = double.Parse(prevAssignedMods[i].Split("(")[1].Replace(")", ""));
+                            prevModMasses[i] = mass;
+                        }
                     }
-
+                    else
+                    {
+                        prevModSites = Array.Empty<int>();   
+                    }
                     // check new OPair mods
                     foreach (var loc in gsm.LocalizedGlycan.Where(p => p.IsLocalized))
                     {
                         var peptide_site = loc.ModSite - 1;
+                        string aa = peptide.Substring(peptide_site - 1, 1);
                         var comp = EngineLayer.GlycanBox.GlobalOGlycans[loc.GlycanID].Composition;
                         string formattedComp = opairCompToMSFragger(comp);
-                        double mass = EngineLayer.GlycanBox.GlobalOGlycans[loc.GlycanID].Mass;
+                        double mass = EngineLayer.GlycanBox.GlobalOGlycans[loc.GlycanID].Mass * 0.00001;    // mass is saved as int * 10e5 in GlycanBox
                         if (!prevModSites.Contains(peptide_site))
                         {
                             // add new assigned modification
-                            newAssignedMods.Add(string.Format("{0}{1}({2})"), peptide_site, , mass);
+                            newAssignedMods.Add(string.Format("{0}{1}({2:0.0000})", peptide_site, aa, mass));
+                        }
+                         else
+                        {
+                            // mod site is already occupied!
+                            if (!overwritePrevious)
+                            {
+                                // there shouldn't be anything here, but print the new and old mods so user can sort it out
+                                newAssignedMods.Add(string.Format("{0}{1}({2:0.0000})", peptide_site, aa, mass));
+                            } else
+                            {
+                                // check if this is a previous glycan to overwrite
+
+
+                            }
                         }
                     }
                 }
@@ -188,9 +213,10 @@ namespace PTMLocalization
             return String.Join("\t", existingPSMline);
         }
 
+        // todo
         public static string opairCompToMSFragger(string inputComp)
         {
-
+            return inputComp;
         }
     }
 }
