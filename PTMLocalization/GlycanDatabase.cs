@@ -18,6 +18,11 @@ namespace EngineLayer
                 while(lines.Peek() != -1)
                 {
                     string line = lines.ReadLine();
+                    // skip headers
+                    if (line.StartsWith("#") || line.StartsWith("//") || line.StartsWith("%") || line.StartsWith("Glycan"))
+                    {
+                        line = lines.ReadLine();
+                    }
                     if (!line.Contains("HexNAc"))
                     {
                         isKind = false;
