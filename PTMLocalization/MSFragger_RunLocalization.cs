@@ -145,7 +145,7 @@ namespace PTMLocalization
                     {
                         try
                         {
-                            currentMsDataFile = Mzml.LoadAllStaticData(spectraFile, filter);
+                            currentMsDataFile = Mzml.LoadAllStaticData(spectraFile, filter, searchForCorrectMs1PrecursorScan:false);
                         } 
                         catch
                         {
@@ -174,7 +174,7 @@ namespace PTMLocalization
                         spectraFile = Path.Combine(rawfilesDirectory, rawfileName);
                         if (File.Exists(spectraFile))
                         {
-                            currentMsDataFile = Mzml.LoadAllStaticData(spectraFile, filter);
+                            currentMsDataFile = Mzml.LoadAllStaticData(spectraFile, filter, searchForCorrectMs1PrecursorScan:false);
                             // warn user that MGF wasn't found for this raw file if we haven't already done so
                             if (!mgfNotFoundWarnings.ContainsKey(rawfileBase))
                             {

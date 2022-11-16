@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net5.0</TargetFramework>
+    <TargetFramework>net6.0</TargetFramework>
     <Company>http://smith.chem.wisc.edu</Company>
     <PackageTags>Proteomics, O-Pair, O-Glycosylation localization, PTM localization, O-Glycan, N-Glycan.</PackageTags>
     <PackageProjectUrl></PackageProjectUrl>
@@ -17,7 +17,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="mzLib" Version="1.0.511" />
+    <PackageReference Include="mzLib" Version="1.0.537" />
   </ItemGroup>
 
   <ItemGroup>
