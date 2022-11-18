@@ -135,6 +135,7 @@ namespace PTMLocalization
                 string rawfileName = rawfileBase + CAL_INPUT_EXTENSION;
                 string scanpairName = rawfileBase + ".pairs";
                 int precursorCharge = MSFragger_PSMTable.GetScanCharge(spectrumString);
+                bool loadedSpectra = false;
 
                 if (!rawfileBase.Equals(currentRawfileBase))
                 {
@@ -146,6 +147,7 @@ namespace PTMLocalization
                         try
                         {
                             currentMsDataFile = Mzml.LoadAllStaticData(spectraFile, filter, searchForCorrectMs1PrecursorScan:false);
+                            loadedSpectra = true;
                         } 
                         catch
                         {
@@ -160,6 +162,7 @@ namespace PTMLocalization
                         Console.WriteLine("Calibrated mzML not found, using calibrated MGF for file {0}", rawfileBase);
                         try { 
                             currentMsDataFile = Mgf.LoadAllStaticData(spectraFile, filter);
+                            loadedSpectra = true;
                         }
                         catch
                         {
@@ -167,7 +170,7 @@ namespace PTMLocalization
                         }
                     }
                     
-                    if (currentMsDataFile is null)
+                    if (!loadedSpectra)
                     {
                         // no calibrated file (mzML/MGF) found (or loading failed), try falling back to raw mzML
                         rawfileName = rawfileBase + ".mzML";
@@ -245,9 +248,18 @@ namespace PTMLocalization
                 PeptideWithSetModifications peptideWithMods = getPeptideWithMSFraggerMods(assignedMods, peptide);
 
                 // get oxo 138/144 ratio from the HCD scan
-                MsDataScan hcdDataScan = msScans[scanNum];
-                var hcdScan = new Ms2ScanWithSpecificMass(hcdDataScan, precursorMZ, precursorCharge, currentRawfile, 4, 3, neutralExperimentalFragments);
-                double ratio = hcdScan.computeOxoRatio(OXO138, OXO144, ProductMassTolerance.Value);
+                double ratio;
+                try
+                {
+                    MsDataScan hcdDataScan = msScans[scanNum];
+                    var hcdScan = new Ms2ScanWithSpecificMass(hcdDataScan, precursorMZ, precursorCharge, currentRawfile, 4, 3, neutralExperimentalFragments);
+                    ratio = hcdScan.computeOxoRatio(OXO138, OXO144, ProductMassTolerance.Value);
+                }
+                catch (KeyNotFoundException)
+                {
+                    Console.WriteLine(string.Format("Error: HCD scan {0} not found in file {1} (aka {2}), could not calculate 138/144 ratio", scanNum, currentRawfile, currentMsDataFile.SourceFile.FileName));
+                    ratio = -1;
+                }
 
                 // finally, run localizer
                 string localizerOutput = LocalizeOGlyc(scan, peptideWithMods, deltaMass, ratio);
