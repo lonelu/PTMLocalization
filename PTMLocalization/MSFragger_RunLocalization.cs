@@ -26,8 +26,8 @@ namespace PTMLocalization
         private int[] isotopes;
         
         public static readonly double AveragineIsotopeMass = 1.00235;
-        public static readonly string OPAIR_HEADERS = "OPair Score\tNumber of Glycans\tTotal Glycan Composition\tGlycan Site Composition(s)\tConfidence Level\tSite Probabilities\t138/144 Ratio\tPaired Scan Num";
-        //public static readonly string OPAIR_HEADERS = "OPair Score\tNumber of Glycans\tTotal Glycan Composition\tGlycan Site Composition(s)\tConfidence Level\tSite Probabilities";
+        public static readonly string OPAIR_HEADERS = "O-Pair Score\tNumber of Glycans\tTotal Glycan Composition\tGlycan Site Composition(s)\tConfidence Level\tSite Probabilities\t138/144 Ratio\tPaired Scan Num";
+        //public static readonly string OPAIR_HEADERS = "O-Pair Score\tNumber of Glycans\tTotal Glycan Composition\tGlycan Site Composition(s)\tConfidence Level\tSite Probabilities";
         public static readonly int OUTPUT_LENGTH = OPAIR_HEADERS.Split("\t").Length;
         public static readonly string EMPTY_OUTPUT = String.Join("\t", new string[OUTPUT_LENGTH]);
         public static readonly string EMPTY_OUTPUT_WITH_PAIRED_SCAN = String.Join("\t", new string[OUTPUT_LENGTH - 1]);
@@ -69,7 +69,7 @@ namespace PTMLocalization
          * to determine which scans to localize and the input peptides/glycan masses for those scans, runs localization,
          * and writes results back to the PSM table. 
          */
-        public void Localize()
+        public int Localize()
         {
             Dictionary<int, int> scanPairs = new();
             if (scanpairFile != null)
@@ -86,18 +86,17 @@ namespace PTMLocalization
             Dictionary<int, MsDataScan> msScans = new();
             List<string> output = new();
             bool overwritePrevious = false;
-            if (PSMtable.Headers.Contains("OPair Score"))
+            if (PSMtable.Headers.Contains("O-Pair Score"))
             {
-                // overwriting previous OP results, don't add new columns
-                output.Add(String.Join("\t", PSMtable.Headers));
-                overwritePrevious = true;
+                Console.WriteLine("Error: PSM table contains previous O-Pair results. Overwriting existing results is not supported. Please try again with a fresh PSM table.");
+                return 1;
             } 
             else
             {
                 // write headers to PSM table
                 GlycoSpectralMatch emptyMatch = new GlycoSpectralMatch();
                 emptyMatch.localizerOutput = OPAIR_HEADERS;
-                output.Add(PSMtable.editPSMLine(emptyMatch, PSMtable.Headers.ToList(), overwritePrevious, false));
+                output.Add(PSMtable.editPSMLine(emptyMatch, PSMtable.Headers.ToList(), GlycanBox.GlobalOGlycans, overwritePrevious, false));
             }
 
             Dictionary<string, bool> mgfNotFoundWarnings = new ();
@@ -130,7 +129,7 @@ namespace PTMLocalization
                     // unmodified peptide - no localization
                     GlycoSpectralMatch emptyGSM = new GlycoSpectralMatch();
                     emptyGSM.localizerOutput = EMPTY_OUTPUT;
-                    output.Add(PSMtable.editPSMLine(emptyGSM, lineSplits.ToList(), overwritePrevious, false));
+                    output.Add(PSMtable.editPSMLine(emptyGSM, lineSplits.ToList(), GlycanBox.GlobalOGlycans, overwritePrevious, false));
                     continue;
                 }
 
@@ -199,7 +198,7 @@ namespace PTMLocalization
                             }
                             GlycoSpectralMatch emptyGSM = new GlycoSpectralMatch();
                             emptyGSM.localizerOutput = EMPTY_OUTPUT;
-                            output.Add(PSMtable.editPSMLine(emptyGSM, lineSplits.ToList(), overwritePrevious, false));
+                            output.Add(PSMtable.editPSMLine(emptyGSM, lineSplits.ToList(), GlycanBox.GlobalOGlycans, overwritePrevious, false));
                             continue;
                         }
                     }
@@ -232,7 +231,7 @@ namespace PTMLocalization
                     // no paired child scan found - do not attempt localization
                     GlycoSpectralMatch emptyGSM = new GlycoSpectralMatch();
                     emptyGSM.localizerOutput = "No paired scan" + EMPTY_OUTPUT;
-                    output.Add(PSMtable.editPSMLine(emptyGSM, lineSplits.ToList(), overwritePrevious, false));
+                    output.Add(PSMtable.editPSMLine(emptyGSM, lineSplits.ToList(), GlycanBox.GlobalOGlycans, overwritePrevious, false));
                     continue;
                 }
 
@@ -247,7 +246,7 @@ namespace PTMLocalization
                     Console.Out.WriteLine(String.Format("Error: MS2 scan {0} not found in the MGF file. No localization performed", childScanNum));
                     GlycoSpectralMatch emptyGSM = new GlycoSpectralMatch();
                     emptyGSM.localizerOutput = EMPTY_OUTPUT;
-                    output.Add(PSMtable.editPSMLine(emptyGSM, lineSplits.ToList(), overwritePrevious, false));
+                    output.Add(PSMtable.editPSMLine(emptyGSM, lineSplits.ToList(), GlycanBox.GlobalOGlycans, overwritePrevious, false));
                     continue;
                 }
 
@@ -276,12 +275,13 @@ namespace PTMLocalization
                 GlycoSpectralMatch gsm = LocalizeOGlyc(scan, peptideWithMods, deltaMass, ratio);
 
                 // write info back to PSM table
-                output.Add(PSMtable.editPSMLine(gsm, lineSplits.ToList(), overwritePrevious, true));
+                output.Add(PSMtable.editPSMLine(gsm, lineSplits.ToList(), GlycanBox.GlobalOGlycans, overwritePrevious, true));
             }
             // write output to PSM table
             File.WriteAllLines(psmFile, output.ToArray());
             totalTimer.Stop();
             Console.WriteLine("\nFinished localization in {0:0.0} s", totalTimer.ElapsedMilliseconds * 0.001);
+            return 0;
         }
 
 

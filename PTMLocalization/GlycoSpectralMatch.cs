@@ -175,6 +175,12 @@ namespace EngineLayer.GlycoSearch
 
         #endregion
 
+        public byte[] getTotalKind()
+        {
+            var glycanBox = GetFirstGraphGlycanBox(this);
+            return glycanBox.Kind;
+        }
+
         public string WriteLine(int? OneBasedStartResidueInProtein)
         {
             var sb = new StringBuilder();

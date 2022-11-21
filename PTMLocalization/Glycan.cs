@@ -494,6 +494,16 @@ namespace EngineLayer
             return kindString.ToString();
         }
 
+        // subtract a Kind (composition) from another
+        public static byte[] subtractKind(byte[] mainKind, byte[] subtractKind)
+        {
+            byte[] newKind = new byte[SugarLength];
+            for (int i = 0; i < SugarLength; i++)
+            {
+                newKind[i] = (byte)(mainKind[i] - subtractKind[i]);
+            }
+            return newKind;
+        }
         #endregion
 
         //TO THINK: Is it reasonable to transfer Glycan to Modification the first time Glycan is read in? Which could save time.

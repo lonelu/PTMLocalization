@@ -1,12 +1,11 @@
-﻿using EngineLayer.GlycoSearch;
+﻿using EngineLayer;
+using EngineLayer.GlycoSearch;
 using Proteomics.ProteolyticDigestion;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 
 namespace PTMLocalization
 {
@@ -15,7 +14,6 @@ namespace PTMLocalization
      */
     public class MSFragger_PSMTable
     {
-        private static readonly string modSitePattern = "([0-9]+)";
         public MSFragger_PSMTable(string FilePath)
         {
             this.FilePath = FilePath;
@@ -40,6 +38,9 @@ namespace PTMLocalization
             {
                 PrecursorMZCol = GetColumnIndex("Observed M/Z");
             }
+            CalcMZCol = GetColumnIndex("Calculated M/Z");
+            CalcPeptideMassCol = GetColumnIndex("Calculated Peptide Mass");
+            ChargeCol = GetColumnIndex("Charge");
         }
 
         public string FilePath { get; set; }
@@ -53,6 +54,9 @@ namespace PTMLocalization
         public int SpectrumCol { get; set; }
         public int ObservedModCol { get; set; }
         public int PrecursorMZCol { get; set; }
+        public int CalcMZCol { get; set; }
+        public int CalcPeptideMassCol { get; set; }
+        public int ChargeCol { get; set; }
 
         public int GetColumnIndex(string columnName)
         {
@@ -131,9 +135,9 @@ namespace PTMLocalization
          * Insert the provided OPair output into the PSM line at the set insertion point, OR, overwrite the existing OPair
          * output if present. 
          */
-        public string editPSMLine(GlycoSpectralMatch gsm, List<string> existingPSMline, bool overwritePrevious, bool writeToAssignedMods)
+        public string editPSMLine(GlycoSpectralMatch gsm, List<string> existingPSMline, Glycan[] globalGlycans, bool overwritePrevious, bool writeToAssignedMods)
         {
-            int insertIndex = GetColumnIndex("Observed Modifications") + 1;
+            int insertIndex = this.ObservedModCol + 1;
 
             if (!overwritePrevious)
             {
@@ -141,7 +145,7 @@ namespace PTMLocalization
             }
             else
             {
-                // previous scan data exists - overwrite it
+                // previous scan data exists - overwrite it [NOTE: debugging mode only - not for use with writeToAssignedMods]
                 string[] localizerOutputEntries = gsm.localizerOutput.Split("\t");
                 for (int i = 0; i < localizerOutputEntries.Length; i++)     // assumes same length localizer output as before
                 {
@@ -149,74 +153,122 @@ namespace PTMLocalization
                 }
             }
 
+            if (gsm.LocalizedGlycan == null)
+            {
+                return String.Join("\t", existingPSMline);
+            }
+
             // also edit Assigned Modifications (and modified peptide) if requested
             if (writeToAssignedMods)
-            {
-                // localization only present for localization levels 1 & 2
-                if ((int) gsm.LocalizationLevel < 3)
+            {               
+                string peptide = existingPSMline[PeptideCol];
+                List<string> newAssignedMods = new List<string>();
+                // read existing assigned mods
+                string prevAssignedModsStr = existingPSMline[AssignedModCol];
+                if (prevAssignedModsStr.Length > 0) {
+                    string[] prevAssignedMods = prevAssignedModsStr.Split(",");
+                    for (int i = 0; i < prevAssignedMods.Length; i++)
+                    {
+                        newAssignedMods.Add(prevAssignedMods[i]);
+                    }
+                }
+
+                // add new assigned modification for each O-Pair mod
+                double opairGlycanMass = 0;
+                bool hasUnlocalizedGlycs = false;
+                byte[] unlocalizedGlycanComp = gsm.getTotalKind();
+                foreach (var localizedGlyc in gsm.LocalizedGlycan)
                 {
-                    string peptide = existingPSMline[PeptideCol];
-                    List<string> newAssignedMods = new List<string>();
-                    // read existing assigned mods
-                    string prevAssignedModsStr = existingPSMline[AssignedModCol];
-                    int[] prevModSites;
-                    if (prevAssignedModsStr.Length > 0) {
-                        string[] prevAssignedMods = prevAssignedModsStr.Split(",");
-                        prevModSites = new int[prevAssignedMods.Length];
-                        double[] prevModMasses = new double[prevAssignedMods.Length];
-                        for (int i = 0; i < prevAssignedMods.Length; i++)
+                    if (localizedGlyc.IsLocalized)
+                    {
+                        unlocalizedGlycanComp = Glycan.subtractKind(unlocalizedGlycanComp, globalGlycans[localizedGlyc.GlycanID].Kind);     // keep track of what glycan(s) are left unlocalized
+
+                        double mass = EngineLayer.GlycanBox.GlobalOGlycans[localizedGlyc.GlycanID].Mass * 0.00001;    // mass is saved as int * 10e5 in GlycanBox
+                        opairGlycanMass += mass;
+                        var peptide_site = localizedGlyc.ModSite - 1;
+                        string aa = peptide.Substring(peptide_site - 1, 1);
+                        var comp = EngineLayer.GlycanBox.GlobalOGlycans[localizedGlyc.GlycanID].Composition;
+                        newAssignedMods.Add(string.Format("{0}{1}({2:0.0000})", peptide_site, aa, mass));
+
+                        // edit modified peptide col
+                        string originalModPeptide = existingPSMline[this.ModifiedPeptideCol];
+                        if (originalModPeptide.Length == 0)
                         {
-                            // mod format is "1C(57.02146)", for example (site, residue, & mass)
-                            string siteAndResidue = prevAssignedMods[i].Split("(")[0];
-                            var matches = Regex.Matches(siteAndResidue, modSitePattern);
-                            int site = int.Parse(matches[0].Groups[1].Value);
-                            prevModSites[i] = site;
-                            double mass = double.Parse(prevAssignedMods[i].Split("(")[1].Replace(")", ""));
-                            prevModMasses[i] = mass;
+                            originalModPeptide = peptide;   // no modified peptide is written if no previous mods. Start with base sequence
+                        }
+                        int residueIndex = -1;
+                        for (int i = 0; i < originalModPeptide.Length; i++)
+                        {
+                            if (originalModPeptide[i] >= 'A' && originalModPeptide[i] <= 'Z')
+                            {
+                                // this is an actual residue, increment residue counter
+                                residueIndex++;
+                            }
+                            if (residueIndex == peptide_site)
+                            {
+                                // Found the glycan location - insert new mod and stop looking
+                                double aaMass = Proteomics.AminoAcidPolymer.Residue.GetResidue(aa).MonoisotopicMass;
+                                string modToInsert = String.Format("[{0:0}]", mass + aaMass);
+                                string newModPep = originalModPeptide.Insert(i, modToInsert);
+                                existingPSMline[this.ModifiedPeptideCol] = newModPep;
+                                break;
+                            }
                         }
                     }
                     else
                     {
-                        prevModSites = Array.Empty<int>();   
-                    }
-                    // check new OPair mods
-                    foreach (var loc in gsm.LocalizedGlycan.Where(p => p.IsLocalized))
-                    {
-                        var peptide_site = loc.ModSite - 1;
-                        string aa = peptide.Substring(peptide_site - 1, 1);
-                        var comp = EngineLayer.GlycanBox.GlobalOGlycans[loc.GlycanID].Composition;
-                        string formattedComp = opairCompToMSFragger(comp);
-                        double mass = EngineLayer.GlycanBox.GlobalOGlycans[loc.GlycanID].Mass * 0.00001;    // mass is saved as int * 10e5 in GlycanBox
-                        if (!prevModSites.Contains(peptide_site))
-                        {
-                            // add new assigned modification
-                            newAssignedMods.Add(string.Format("{0}{1}({2:0.0000})", peptide_site, aa, mass));
-                        }
-                         else
-                        {
-                            // mod site is already occupied!
-                            if (!overwritePrevious)
-                            {
-                                // there shouldn't be anything here, but print the new and old mods so user can sort it out
-                                newAssignedMods.Add(string.Format("{0}{1}({2:0.0000})", peptide_site, aa, mass));
-                            } else
-                            {
-                                // check if this is a previous glycan to overwrite
-
-
-                            }
-                        }
+                        // level 3 or otherwise unlocalized glycan. NOTE: there may be multiple entries for each possible equivalent site, so do not read the mass here as it may not be correct
+                        hasUnlocalizedGlycs = true;
                     }
                 }
+                // if fewer glycosites than glycans (e.g., N-glycan/other glycan present), may have remaining localized glycans: check for them
+                foreach (byte b in unlocalizedGlycanComp)
+                {
+                    if (b > 0)
+                    {
+                        hasUnlocalizedGlycs = true;
+                        break;
+                    }
+                }
+                // handle unlocalized glycan(s) writing to assigned mods
+                if (hasUnlocalizedGlycs)
+                {
+                    newAssignedMods.Sort();
+                    // at least one unlocalized glycan present. Determine total unlocalized mass
+                    double unlocMass = Glycan.GetMass(unlocalizedGlycanComp) * 0.00001;
+                    opairGlycanMass += unlocMass;
+                    // add total unlocalized mass as an assigned mod
+                    newAssignedMods.Insert(0, string.Format("{0:0.0000}", unlocMass));      // put the unlocalized mod first
+                } else
+                {
+                    newAssignedMods.Sort();
+                }
+
+                // write final mods back to assigned mods column
+                string finalAssignedMods = string.Join(",", newAssignedMods);
+                existingPSMline[this.AssignedModCol] = finalAssignedMods;
+
+                // edit delta mass, calculated peptide mass and m/z, and 
+                double originalDeltaMass = Double.Parse(existingPSMline[this.DeltaMassCol]);
+                existingPSMline[this.DeltaMassCol] = String.Format("{0:0.0000}", originalDeltaMass - opairGlycanMass);
+
+                double prevCalcMZ = Double.Parse(existingPSMline[this.CalcMZCol]);
+                double newCalcMZ = prevCalcMZ + (opairGlycanMass / double.Parse(existingPSMline[this.ChargeCol]));      // previous m/z already has proton mass(es) handled, so just add glycan mass/charge
+                existingPSMline[this.CalcMZCol] = String.Format("{0:0.0000}", newCalcMZ);
+
+                double prevCalcPeptideMass = Double.Parse(existingPSMline[this.CalcPeptideMassCol]);
+                existingPSMline[this.CalcPeptideMassCol] = String.Format("{0:0.0000}", prevCalcPeptideMass + opairGlycanMass);
+                
             }
 
             return String.Join("\t", existingPSMline);
         }
 
-        // todo
-        public static string opairCompToMSFragger(string inputComp)
+        // check if this PSM table has previously had OPair results written by looking for O-Pair column headers
+        public bool hasPreviousOPairResults()
         {
-            return inputComp;
+            return GetColumnIndex("O-Pair Score") != -1;     // -1 means not found, no previous O-Pair results
         }
+
     }
 }

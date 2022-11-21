@@ -54,8 +54,8 @@ namespace PTMLocalization
             }
 
             var localizer = new MSFragger_RunLocalization(psmFile, scanpairFile, rawfileDirectory, glycoDatabase, maxNumGlycans, PrecursorMassTolerance, ProductMassTolerance, isotopes);
-            localizer.Localize();
-            return 0;
+            int returnCode = localizer.Localize();
+            return returnCode;
         }
 
     }
