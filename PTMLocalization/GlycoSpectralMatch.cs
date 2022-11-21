@@ -238,7 +238,8 @@ namespace EngineLayer.GlycoSearch
                     //sb.Append("\t");
                     //sb.Append("\t");
                 }
-                sb.Append(oxoRatio);
+                sb.Append(oxoRatio); sb.Append("\t");
+                sb.Append(NGlycanMotifExist);
             }
             return sb.ToString();
         }
