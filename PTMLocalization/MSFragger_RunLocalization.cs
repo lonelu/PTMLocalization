@@ -25,7 +25,13 @@ namespace PTMLocalization
         private readonly string o_glycan_database;
         private int maxOGlycansPerPeptide;
         private int[] isotopes;
-        
+
+        private MsDataFile currentMsDataFile;
+        private string currentRawfile;
+        private string currentRawfileBase;
+        private Dictionary<int, MsDataScan> msScans;
+        private List<string> output;
+
         public static readonly double AveragineIsotopeMass = 1.00235;
         public static readonly string OPAIR_HEADERS = "O-Pair Score\tNumber of Glycans\tTotal Glycan Composition\tGlycan Site Composition(s)\tConfidence Level\tSite Probabilities\t138/144 Ratio\tHas N-Glyc Sequon\tPaired Scan Num";
         //public static readonly string OPAIR_HEADERS = "O-Pair Score\tNumber of Glycans\tTotal Glycan Composition\tGlycan Site Composition(s)\tConfidence Level\tSite Probabilities";
@@ -40,7 +46,6 @@ namespace PTMLocalization
         private static readonly double OXO144 = 144.06552;
         private static readonly Regex NglycMotifRegex = new Regex("N[^P][ST]", RegexOptions.Compiled);
 
-        public MSFragger_RunLocalization(string _psmFile, string _scanpairFile, string _rawfilesDirectory, string _o_glycan_database_path, int _maxOGlycansPerPeptide, Tolerance _PrecursorMassTolerance, Tolerance _ProductMassTolerance, int[] _isotopes)
         {
             psmFile = _psmFile;
             scanpairFile = _scanpairFile;
@@ -50,6 +55,9 @@ namespace PTMLocalization
             ProductMassTolerance = _ProductMassTolerance;
             maxOGlycansPerPeptide = _maxOGlycansPerPeptide;
             isotopes = _isotopes;
+
+            msScans = new();
+            output = new();
 
             Setup();
         }
@@ -63,6 +71,66 @@ namespace PTMLocalization
             GlycanBox.GlobalOGlycans = GlycanDatabase.LoadGlycan(o_glycan_database, true, true).ToArray();
             GlycanBox.GlobalOGlycanMods = GlycanBox.BuildGlobalOGlycanMods(GlycanBox.GlobalOGlycans).ToArray();
             GlycanBox.OGlycanBoxes = GlycanBox.BuildGlycanBoxes(maxOGlycansPerPeptide, GlycanBox.GlobalOGlycans, GlycanBox.GlobalOGlycanMods).OrderBy(p => p.Mass).ToArray();
+        }
+
+        private bool CheckAndLoadData(string rawfileBase, string rawfileName, Dictionary<string, bool> mzmlNotFoundWarnings, Dictionary<string, bool> mgfNotFoundWarnings)
+        {
+            // new rawfile: load scan data
+            string spectraFile = Path.Combine(rawfilesDirectory, rawfileName);
+
+            FilteringParams filter = new FilteringParams();
+            if (File.Exists(spectraFile))
+            {
+                try
+                {
+                    currentMsDataFile = Mzml.LoadAllStaticData(spectraFile, filter, searchForCorrectMs1PrecursorScan: false);
+                    return true;
+                }
+                catch
+                {
+                    currentMsDataFile = null;
+                }
+            }
+            else if (File.Exists(Path.Combine(rawfilesDirectory, rawfileBase + CAL_INPUT_EXTENSION_FALLBACK)))
+            {
+                // support legacy "_calibrated.MGF" if present and "_calibrated.mzML" is not
+                spectraFile = Path.Combine(rawfilesDirectory, rawfileBase + CAL_INPUT_EXTENSION_FALLBACK);
+                filter = new FilteringParams();
+                Console.WriteLine("Calibrated mzML not found, using calibrated MGF for file {0}", rawfileBase);
+                try
+                {
+                    currentMsDataFile = Mgf.LoadAllStaticData(spectraFile, filter);
+                    return true;
+                }
+                catch
+                {
+                    currentMsDataFile = null;
+                }
+            }
+
+            // no calibrated file (mzML/MGF) found (or loading failed), try falling back to raw mzML
+            rawfileName = rawfileBase + ".mzML";
+            spectraFile = Path.Combine(rawfilesDirectory, rawfileName);
+            if (File.Exists(spectraFile))
+            {
+                currentMsDataFile = Mzml.LoadAllStaticData(spectraFile, filter, searchForCorrectMs1PrecursorScan: false);
+                // warn user that MGF wasn't found for this raw file if we haven't already done so
+                if (!mgfNotFoundWarnings.ContainsKey(rawfileBase))
+                {
+                    Console.WriteLine("Warning: calibrated file not found or not loaded for raw file {0}, uncalibrated mzML will be used", rawfileBase);
+                    mgfNotFoundWarnings.Add(rawfileBase, true);
+                }
+                return true;
+            }
+            else
+            {
+                if (!mzmlNotFoundWarnings.ContainsKey(rawfileBase))
+                {
+                    Console.WriteLine("Warning: no MGF or mzML found for file {0}, PSMs from this file will NOT be localized!", rawfileBase);
+                    mzmlNotFoundWarnings.Add(rawfileBase, true);
+                }
+                return false;
+            }
         }
 
 
@@ -82,11 +150,7 @@ namespace PTMLocalization
 
             // read PSM table to prepare to pass scans to localizer
             MSFragger_PSMTable PSMtable = new(psmFile);
-            string currentRawfile = "";
-            string currentRawfileBase = "";
-            MsDataFile currentMsDataFile = null;
-            Dictionary<int, MsDataScan> msScans = new();
-            List<string> output = new();
+
             bool overwritePrevious = false;
             if (PSMtable.Headers.Contains("O-Pair Score"))
             {
@@ -138,73 +202,22 @@ namespace PTMLocalization
                 // Load scan (and rawfile if necessary)
                 int scanNum = MSFragger_PSMTable.GetScanNum(spectrumString);
                 string rawfileBase = MSFragger_PSMTable.GetRawFile(spectrumString);
-                string rawfileName = rawfileBase + CAL_INPUT_EXTENSION;
                 string scanpairName = rawfileBase + ".pairs";
                 int precursorCharge = MSFragger_PSMTable.GetScanCharge(spectrumString);
-                bool loadedSpectra = false;
+                string rawfileName = rawfileBase + CAL_INPUT_EXTENSION;
 
                 if (!rawfileBase.Equals(currentRawfileBase))
                 {
-                    // new rawfile: load scan data
-                    string spectraFile = Path.Combine(rawfilesDirectory, rawfileName);
-                    FilteringParams filter = new FilteringParams();
-                    if (File.Exists(spectraFile))
+                    bool loadSuccess = CheckAndLoadData(rawfileBase, rawfileName, mzmlNotFoundWarnings, mgfNotFoundWarnings);
+                    if (!loadSuccess)
                     {
-                        try
-                        {
-                            currentMsDataFile = Mzml.LoadAllStaticData(spectraFile, filter, searchForCorrectMs1PrecursorScan:false);
-                            loadedSpectra = true;
-                        } 
-                        catch
-                        {
-                            currentMsDataFile = null;
-                        }
-                    } 
-                    else if (File.Exists(Path.Combine(rawfilesDirectory, rawfileBase + CAL_INPUT_EXTENSION_FALLBACK)))
-                    {
-                        // support legacy "_calibrated.MGF" if present and "_calibrated.mzML" is not
-                        spectraFile = Path.Combine(rawfilesDirectory, rawfileBase + CAL_INPUT_EXTENSION_FALLBACK);
-                        filter = new FilteringParams();
-                        Console.WriteLine("Calibrated mzML not found, using calibrated MGF for file {0}", rawfileBase);
-                        try { 
-                            currentMsDataFile = Mgf.LoadAllStaticData(spectraFile, filter);
-                            loadedSpectra = true;
-                        }
-                        catch
-                        {
-                            currentMsDataFile = null;
-                        }
-                    }
-                    
-                    if (!loadedSpectra)
-                    {
-                        // no calibrated file (mzML/MGF) found (or loading failed), try falling back to raw mzML
-                        rawfileName = rawfileBase + ".mzML";
-                        spectraFile = Path.Combine(rawfilesDirectory, rawfileName);
-                        if (File.Exists(spectraFile))
-                        {
-                            currentMsDataFile = Mzml.LoadAllStaticData(spectraFile, filter, searchForCorrectMs1PrecursorScan:false);
-                            // warn user that MGF wasn't found for this raw file if we haven't already done so
-                            if (!mgfNotFoundWarnings.ContainsKey(rawfileBase))
-                            {
-                                Console.WriteLine("Warning: calibrated file not found or not loaded for raw file {0}, uncalibrated mzML will be used", rawfileBase);
-                                mgfNotFoundWarnings.Add(rawfileBase, true);
-                            }
-                        } 
-                        else 
-                        {
-                            if (!mzmlNotFoundWarnings.ContainsKey(rawfileBase))
-                            {
-                                Console.WriteLine("Warning: no MGF or mzML found for file {0}, PSMs from this file will NOT be localized!", rawfileBase);
-                                mzmlNotFoundWarnings.Add(rawfileBase, true);
-                            }
-                            GlycoSpectralMatch emptyGSM = new GlycoSpectralMatch();
-                            emptyGSM.localizerOutput = EMPTY_OUTPUT;
-                            output.Add(PSMtable.editPSMLine(emptyGSM, lineSplits.ToList(), GlycanBox.GlobalOGlycans, overwritePrevious, false));
-                            continue;
-                        }
+                        GlycoSpectralMatch emptyGSM = new GlycoSpectralMatch();
+                        emptyGSM.localizerOutput = EMPTY_OUTPUT;
+                        output.Add(PSMtable.editPSMLine(emptyGSM, lineSplits.ToList(), GlycanBox.GlobalOGlycans, overwritePrevious, false));
+                        continue;
                     }
                     List<MsDataScan> allScans = currentMsDataFile.GetAllScansList();
+
                     // save scans by scan number, since MGF file from MSFragger does not guarantee all scans will be saved
                     msScans = new();
                     foreach (MsDataScan currentScan in allScans)
