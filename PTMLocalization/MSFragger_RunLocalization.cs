@@ -42,7 +42,8 @@ namespace PTMLocalization
         public static readonly string EMPTY_OUTPUT_WITH_PAIRED_SCAN = String.Join("\t", new string[OUTPUT_LENGTH - 1]);
 
         private static readonly string CAL_INPUT_EXTENSION = "_calibrated.mzML";
-        private static readonly string CAL_INPUT_EXTENSION_FALLBACK = "_calibrated.MGF";
+        private static readonly string CAL_INPUT_EXTENSION_FALLBACK = "_uncalibrated.mzML";
+        private static readonly string CAL_INPUT_EXTENSION_FALLBACK2 = "_calibrated.MGF";
 
         private static readonly double OXO138 = 138.05495;
         private static readonly double OXO144 = 144.06552;
@@ -77,7 +78,7 @@ namespace PTMLocalization
             GlycanBox.OGlycanBoxes = GlycanBox.BuildGlycanBoxes(maxOGlycansPerPeptide, GlycanBox.GlobalOGlycans, GlycanBox.GlobalOGlycanMods).OrderBy(p => p.Mass).ToArray();
         }
 
-        private bool CheckAndLoadData(string rawfileBase, string rawfileName, Dictionary<string, bool> mzmlNotFoundWarnings, Dictionary<string, bool> mgfNotFoundWarnings)
+        private bool CheckAndLoadData(string rawfileBase, string rawfileName, Dictionary<string, bool> mzmlNotFoundWarnings)
         {
             // new rawfile: load scan data
             string spectraFile = null;
@@ -112,12 +113,27 @@ namespace PTMLocalization
                     currentMsDataFile = null;
                 }
             }
+            // fallback attempts to locate the raw file if not using a filelist from FragPipe
             else if (File.Exists(Path.Combine(rawfilesDirectory, rawfileBase + CAL_INPUT_EXTENSION_FALLBACK)))
             {
-                // support legacy "_calibrated.MGF" if present and "_calibrated.mzML" is not
+                // support "_uncalibrated.mzML" if present and "_calibrated.mzML" is not
                 spectraFile = Path.Combine(rawfilesDirectory, rawfileBase + CAL_INPUT_EXTENSION_FALLBACK);
                 filter = new FilteringParams();
-                Console.WriteLine("Calibrated mzML not found, using calibrated MGF for file {0}", rawfileBase);
+                try
+                {
+                    currentMsDataFile = Mgf.LoadAllStaticData(spectraFile, filter);
+                    return true;
+                }
+                catch
+                {
+                    currentMsDataFile = null;
+                }
+            }
+            else if (File.Exists(Path.Combine(rawfilesDirectory, rawfileBase + CAL_INPUT_EXTENSION_FALLBACK2)))
+            {
+                // support legacy "_calibrated.MGF" if present and other options are not
+                spectraFile = Path.Combine(rawfilesDirectory, rawfileBase + CAL_INPUT_EXTENSION_FALLBACK2);
+                filter = new FilteringParams();
                 try
                 {
                     currentMsDataFile = Mgf.LoadAllStaticData(spectraFile, filter);
@@ -135,19 +151,13 @@ namespace PTMLocalization
             if (File.Exists(spectraFile))
             {
                 currentMsDataFile = Mzml.LoadAllStaticData(spectraFile, filter, searchForCorrectMs1PrecursorScan: false);
-                // warn user that MGF wasn't found for this raw file if we haven't already done so
-                if (!mgfNotFoundWarnings.ContainsKey(rawfileBase))
-                {
-                    Console.WriteLine("Warning: calibrated file not found or not loaded for raw file {0}, uncalibrated mzML will be used", rawfileBase);
-                    mgfNotFoundWarnings.Add(rawfileBase, true);
-                }
                 return true;
             }
             else
             {
                 if (!mzmlNotFoundWarnings.ContainsKey(rawfileBase))
                 {
-                    Console.WriteLine("Warning: no MGF or mzML found for file {0}, PSMs from this file will NOT be localized!", rawfileBase);
+                    Console.WriteLine("Warning: no mzML found for file {0}, PSMs from this file will NOT be localized!", rawfileBase);
                     mzmlNotFoundWarnings.Add(rawfileBase, true);
                 }
                 return false;
@@ -225,11 +235,10 @@ namespace PTMLocalization
                 output.Add(PSMtable.editPSMLine(emptyMatch, PSMtable.Headers.ToList(), GlycanBox.GlobalOGlycans, overwritePrevious, false));
             }
 
-            Dictionary<string, bool> mgfNotFoundWarnings = new ();
             Dictionary<string, bool> mzmlNotFoundWarnings = new();
             // timers and etc
-            System.Diagnostics.Stopwatch timer = new System.Diagnostics.Stopwatch();
-            System.Diagnostics.Stopwatch totalTimer = new System.Diagnostics.Stopwatch();
+            System.Diagnostics.Stopwatch timer = new();
+            System.Diagnostics.Stopwatch totalTimer = new();
             timer.Start();
             totalTimer.Start();
             int psmCount = 0;
@@ -268,7 +277,7 @@ namespace PTMLocalization
 
                 if (!rawfileBase.Equals(currentRawfileBase))
                 {
-                    bool loadSuccess = CheckAndLoadData(rawfileBase, rawfileName, mzmlNotFoundWarnings, mgfNotFoundWarnings);
+                    bool loadSuccess = CheckAndLoadData(rawfileBase, rawfileName, mzmlNotFoundWarnings);
                     if (!loadSuccess)
                     {
                         GlycoSpectralMatch emptyGSM = new GlycoSpectralMatch();
