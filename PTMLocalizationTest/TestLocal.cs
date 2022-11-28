@@ -188,7 +188,7 @@ namespace PTMLocalizationTest
             int maxNumGlycans = 3;
             int[] isotopes = { 0, 1, 2 };
 
-            var localizer = new MSFragger_RunLocalization(psmFile, scanpairFile, rawfileDirectory, glycoDatabase, maxNumGlycans, PrecursorMassTolerance, ProductMassTolerance, isotopes);
+            var localizer = new MSFragger_RunLocalization(psmFile, scanpairFile, rawfileDirectory, null, glycoDatabase, maxNumGlycans, PrecursorMassTolerance, ProductMassTolerance, isotopes);
             localizer.Localize();
         }
 

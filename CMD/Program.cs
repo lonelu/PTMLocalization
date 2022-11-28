@@ -56,7 +56,7 @@ namespace CMD
             try
             {
                 var task = new Task();
-                errorCode = task.run_msfragger(settings.productPpmTol, settings.precursorPpmTol, settings.psmFile, settings.scanpairFile, settings.rawfileDirectory, settings.glycoDatabase, settings.maxNumGlycans, settings.minIsotopeError, settings.maxIsotopeError);
+                errorCode = task.run_msfragger(settings.productPpmTol, settings.precursorPpmTol, settings.psmFile, settings.scanpairFile, settings.rawfileDirectory, settings.lcmsFilesList, settings.glycoDatabase, settings.maxNumGlycans, settings.minIsotopeError, settings.maxIsotopeError);
                 if (errorCode == 0)
                 {
                     Console.WriteLine("Run finished.");
@@ -104,15 +104,43 @@ namespace CMD
                     return false;
                 }
             }
+
+            // raw file checking 
+            bool rawfilesFound = false;
+            if (settings.lcmsFilesList != null)
+            {
+                settings.lcmsFilesList = settings.lcmsFilesList.Trim();
+                if (!File.Exists(settings.lcmsFilesList))
+                {
+                    Console.WriteLine("Error: lcms file not found at {0}", settings.lcmsFilesList);
+                } 
+                else
+                {
+                    rawfilesFound = true;
+                }
+            }
             if (settings.rawfileDirectory != null)
             {
                 settings.rawfileDirectory = settings.rawfileDirectory.Trim();
                 if (!Directory.Exists(settings.rawfileDirectory))
                 {
-                    Console.WriteLine("Error: rawfile directory not found at {0}", settings.rawfileDirectory);
-                    return false;
+                    if (!rawfilesFound)
+                    {
+                        // warn if an lcms file list has not been provided
+                        Console.WriteLine("Error: rawfile directory not found at {0}", settings.rawfileDirectory);
+                    }
+                }
+                else
+                {
+                    rawfilesFound = true;
                 }
             }
+            if (!rawfilesFound)
+            {
+                return false;
+            }
+
+            // glyco database checking
             if (settings.glycoDatabase != null)
             {
                 settings.glycoDatabase = settings.glycoDatabase.Trim();

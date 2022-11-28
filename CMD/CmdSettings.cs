@@ -35,6 +35,9 @@ namespace CMD
         [Option('d', HelpText = "[Optional] rawfileDirectory")]
         public string rawfileDirectory { get; set; }
 
+        [Option('r', HelpText = "[Optional] LCMS file list (supercedes rawfileDirectory (-d))")]
+        public string lcmsFilesList { get; set; }
+
         [Option('s', HelpText = "[Optional] psmFile")]
         public string psmFile { get; set; }
 
@@ -56,6 +59,7 @@ namespace CMD
             x += " -i " + minIsotopeError.ToString(); 
             x += " -j " + maxIsotopeError.ToString();
             x += " -d " + rawfileDirectory;
+            x += " -r " + lcmsFilesList;
             x += " -s " + psmFile;
             x += " -p " + scanpairFile;
             x += " -o " + outputFolder;

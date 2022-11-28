@@ -22,10 +22,12 @@ namespace PTMLocalization
         private readonly string psmFile;
         private readonly string scanpairFile;
         private readonly string rawfilesDirectory;
+        private readonly string lcmsFileListPath;
         private readonly string o_glycan_database;
         private int maxOGlycansPerPeptide;
         private int[] isotopes;
 
+        private Dictionary<string, string> lcmsPaths;
         private MsDataFile currentMsDataFile;
         private string currentRawfile;
         private string currentRawfileBase;
@@ -46,10 +48,12 @@ namespace PTMLocalization
         private static readonly double OXO144 = 144.06552;
         private static readonly Regex NglycMotifRegex = new Regex("N[^P][ST]", RegexOptions.Compiled);
 
+        public MSFragger_RunLocalization(string _psmFile, string _scanpairFile, string _rawfilesDirectory, string lcmsFileList, string _o_glycan_database_path, int _maxOGlycansPerPeptide, Tolerance _PrecursorMassTolerance, Tolerance _ProductMassTolerance, int[] _isotopes)
         {
             psmFile = _psmFile;
             scanpairFile = _scanpairFile;
             rawfilesDirectory = _rawfilesDirectory;
+            lcmsFileListPath = lcmsFileList;
             o_glycan_database = _o_glycan_database_path;
             PrecursorMassTolerance = _PrecursorMassTolerance;
             ProductMassTolerance = _ProductMassTolerance;
@@ -76,7 +80,24 @@ namespace PTMLocalization
         private bool CheckAndLoadData(string rawfileBase, string rawfileName, Dictionary<string, bool> mzmlNotFoundWarnings, Dictionary<string, bool> mgfNotFoundWarnings)
         {
             // new rawfile: load scan data
-            string spectraFile = Path.Combine(rawfilesDirectory, rawfileName);
+            string spectraFile = null;
+            bool fileFound = false;
+            if (lcmsPaths.Count > 0)
+            {
+                // read from FragPipe file list
+                fileFound = lcmsPaths.TryGetValue(rawfileBase, out spectraFile);
+            } 
+            if (!fileFound && rawfilesDirectory != null)
+            {
+                // fall back to read from rawfile directory if provided
+                spectraFile = Path.Combine(rawfilesDirectory, rawfileName);
+            }
+
+            if (spectraFile == null)
+            {
+                Console.WriteLine(String.Format("Error: count not file spectra file from FragPipe list for file {0}", rawfileBase));
+                return false;
+            }
 
             FilteringParams filter = new FilteringParams();
             if (File.Exists(spectraFile))
@@ -86,7 +107,7 @@ namespace PTMLocalization
                     currentMsDataFile = Mzml.LoadAllStaticData(spectraFile, filter, searchForCorrectMs1PrecursorScan: false);
                     return true;
                 }
-                catch
+                catch (Exception ex)
                 {
                     currentMsDataFile = null;
                 }
@@ -133,6 +154,35 @@ namespace PTMLocalization
             }
         }
 
+        /**
+         * Reads FragPipe-generated list of raw file paths to use. Paths may be 
+         * [filename]_calibrated.mzML, 
+         * [filename]_uncalibrated.mzML, or 
+         * [filename].mzML
+         * Returns dictionary of base filename: full path for all files
+         */
+        private bool parseLCMSfilePaths()
+        {
+            lcmsPaths = new();
+            try
+            {
+                string[] allLines = File.ReadAllLines(lcmsFileListPath);
+                foreach (string line in allLines)
+                {
+                    // remove possible calibration signifiers
+                    string strippedLine = line.Replace("\n", "").Trim();
+                    string basename = Path.GetFileNameWithoutExtension(strippedLine);
+                    basename = basename.Replace("_uncalibrated", "");
+                    basename = basename.Replace("_calibrated", "");
+                    lcmsPaths.Add(basename, strippedLine);
+                }
+                return true;
+            } catch
+            {
+                return false;
+            }
+        }
+
 
         /**
          * Main method to localize from MSFragger outputs. Loads the MSFragger PSM and scan-pair tables, parses PSM information
@@ -146,6 +196,16 @@ namespace PTMLocalization
             {
                 // single scanPair file passed directly - use. Otherwise, will read below during PSM reading
                 scanPairs = MSFragger_PSMTable.ParseScanPairTable(scanpairFile);
+            }
+
+            if (lcmsFileListPath != null)
+            {
+                bool parseSuccess = parseLCMSfilePaths();
+                if (!parseSuccess && rawfilesDirectory == null)
+                {
+                    Console.WriteLine("Error: could not load FragPipe LCMS files list and no raw file directory provided. Cannot localize");
+                    return 1;
+                }
             }
 
             // read PSM table to prepare to pass scans to localizer
