@@ -96,7 +96,7 @@ namespace PTMLocalization
 
             if (spectraFile == null)
             {
-                Console.WriteLine(String.Format("Error: count not file spectra file from FragPipe list for file {0}", rawfileBase));
+                Console.WriteLine(String.Format("Error: could not find spectra file from FragPipe list for file {0}", rawfileBase));
                 return false;
             }
 
@@ -181,10 +181,56 @@ namespace PTMLocalization
                 {
                     // remove possible calibration signifiers
                     string strippedLine = line.Replace("\n", "").Trim();
+                    string path = Path.GetFullPath(strippedLine);
+                    string filename = Path.GetFileName(strippedLine);
                     string basename = Path.GetFileNameWithoutExtension(strippedLine);
                     basename = basename.Replace("_uncalibrated", "");
                     basename = basename.Replace("_calibrated", "");
-                    lcmsPaths.Add(basename, strippedLine);
+
+                    if (filename.Contains("_calibrated"))
+                    {
+                        // calibrated mzML passed from FragPipe: look for calibrated, then uncalibrated, then original mzML
+                        if (File.Exists(strippedLine))
+                        {
+                            lcmsPaths.Add(basename, path);
+                        } 
+                        else
+                        {
+                            // check uncal mzML
+                            string uncalMzmlPath = path.Replace("_calibrated.mzML", "_uncalibrated.mzML");
+                            if (File.Exists(uncalMzmlPath))
+                            {
+                                lcmsPaths.Add(basename, uncalMzmlPath);
+                            }
+                            else
+                            {
+                                // check original mzML
+                                string originalMzmlPath = path.Replace("_calibrated.mzML", ".mzML");
+                                if (File.Exists(originalMzmlPath))
+                                {
+                                    lcmsPaths.Add(basename, originalMzmlPath);
+                                } 
+                                else
+                                {
+                                    Console.WriteLine(String.Format("Error: no mzML file found for input {0}", strippedLine));
+                                    return false;
+                                }
+                            }
+                        }
+                    } 
+                    else
+                    {
+                        // non-calibrated file passed, read it exactly
+                        if (File.Exists(strippedLine))
+                        {
+                            lcmsPaths.Add(basename, path);
+                        }
+                        else
+                        {
+                            Console.WriteLine(String.Format("Error: no mzML file found for input {0}", strippedLine));
+                            return false;
+                        }
+                    }
                 }
                 return true;
             } catch
@@ -213,7 +259,7 @@ namespace PTMLocalization
                 bool parseSuccess = parseLCMSfilePaths();
                 if (!parseSuccess && rawfilesDirectory == null)
                 {
-                    Console.WriteLine("Error: could not load FragPipe LCMS files list and no raw file directory provided. Cannot localize");
+                    Console.WriteLine("Error: could not load FragPipe LCMS files list. Cannot localize");
                     return 1;
                 }
             }
