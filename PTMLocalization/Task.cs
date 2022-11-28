@@ -1,18 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using Proteomics;
-using Proteomics.Fragmentation;
-using Proteomics.ProteolyticDigestion;
 using MzLibUtil;
-using EngineLayer.GlycoSearch;
-using IO.Mgf;
-using MassSpectrometry;
 using EngineLayer;
 using System.IO;
 
