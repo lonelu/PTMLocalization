@@ -21,7 +21,7 @@ namespace PTMLocalization
         private Tolerance PrecursorMassTolerance;
         private readonly string psmFile;
         private readonly string scanpairFile;
-        private readonly string rawfilesDirectory;
+        private string rawfilesDirectory;
         private readonly string lcmsFileListPath;
         private readonly string o_glycan_database;
         private int maxOGlycansPerPeptide;
@@ -78,7 +78,7 @@ namespace PTMLocalization
             GlycanBox.OGlycanBoxes = GlycanBox.BuildGlycanBoxes(maxOGlycansPerPeptide, GlycanBox.GlobalOGlycans, GlycanBox.GlobalOGlycanMods).OrderBy(p => p.Mass).ToArray();
         }
 
-        private bool CheckAndLoadData(string rawfileBase, string rawfileName, Dictionary<string, bool> mzmlNotFoundWarnings)
+        private bool CheckAndLoadData(string rawfileBase, string rawfileName, Dictionary<string, bool> mzmlNotFoundWarnings, bool usingLcmsFilePath)
         {
             // new rawfile: load scan data
             string spectraFile = null;
@@ -98,6 +98,12 @@ namespace PTMLocalization
             {
                 Console.WriteLine(String.Format("Error: could not find spectra file from FragPipe list for file {0}", rawfileBase));
                 return false;
+            } 
+
+            // init directory path if reading from LCMS file list rather than from raw directory
+            if (usingLcmsFilePath)
+            {
+                rawfilesDirectory = Path.GetDirectoryName(spectraFile);
             }
 
             FilteringParams filter = new FilteringParams();
@@ -248,6 +254,7 @@ namespace PTMLocalization
         public int Localize()
         {
             Dictionary<int, int> scanPairs = new();
+            bool usingLcmsFilePath = false;
             if (scanpairFile != null)
             {
                 // single scanPair file passed directly - use. Otherwise, will read below during PSM reading
@@ -262,6 +269,7 @@ namespace PTMLocalization
                     Console.WriteLine("Error: could not load FragPipe LCMS files list. Cannot localize");
                     return 1;
                 }
+                usingLcmsFilePath = true;
             }
 
             // read PSM table to prepare to pass scans to localizer
@@ -323,7 +331,7 @@ namespace PTMLocalization
 
                 if (!rawfileBase.Equals(currentRawfileBase))
                 {
-                    bool loadSuccess = CheckAndLoadData(rawfileBase, rawfileName, mzmlNotFoundWarnings);
+                    bool loadSuccess = CheckAndLoadData(rawfileBase, rawfileName, mzmlNotFoundWarnings, usingLcmsFilePath);
                     if (!loadSuccess)
                     {
                         GlycoSpectralMatch emptyGSM = new GlycoSpectralMatch();
