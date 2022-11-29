@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace PTMLocalization
 {
@@ -166,7 +167,7 @@ namespace PTMLocalization
                 // read existing assigned mods
                 string prevAssignedModsStr = existingPSMline[AssignedModCol];
                 if (prevAssignedModsStr.Length > 0) {
-                    string[] prevAssignedMods = prevAssignedModsStr.Split(",");
+                    string[] prevAssignedMods = prevAssignedModsStr.Split(", ");
                     for (int i = 0; i < prevAssignedMods.Length; i++)
                     {
                         newAssignedMods.Add(prevAssignedMods[i]);
@@ -245,6 +246,8 @@ namespace PTMLocalization
                 }
 
                 // write final mods back to assigned mods column
+                ModComparer mc = new ModComparer();
+                newAssignedMods.Sort(mc);
                 string finalAssignedMods = string.Join(",", newAssignedMods);
                 existingPSMline[this.AssignedModCol] = finalAssignedMods;
 
@@ -270,5 +273,29 @@ namespace PTMLocalization
             return GetColumnIndex("O-Pair Score") != -1;     // -1 means not found, no previous O-Pair results
         }
 
+        
+    }
+
+    public class ModComparer : IComparer<string>
+    {
+        public ModComparer() { }
+        public int Compare(string mod1, string mod2)
+        {
+            int pos1 = int.Parse(Regex.Match(mod1, "[0-9]+").Value);
+            int pos2 = int.Parse(Regex.Match(mod2, "[0-9]+").Value);
+
+            if (pos1 < pos2)
+            {
+                return -1;
+            }
+            else if (pos1 == pos2)
+            {
+                return 0;
+            }
+            else
+            {
+                return 1;
+            }
+        }
     }
 }
