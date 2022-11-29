@@ -178,6 +178,7 @@ namespace PTMLocalization
                 double opairGlycanMass = 0;
                 bool hasUnlocalizedGlycs = false;
                 byte[] unlocalizedGlycanComp = gsm.getTotalKind();
+                List<int> assignedGlycPositions = new();
                 foreach (var localizedGlyc in gsm.LocalizedGlycan)
                 {
                     if (localizedGlyc.IsLocalized)
@@ -190,31 +191,10 @@ namespace PTMLocalization
                         string aa = peptide.Substring(peptide_site - 1, 1);
                         var comp = EngineLayer.GlycanBox.GlobalOGlycans[localizedGlyc.GlycanID].Composition;
                         newAssignedMods.Add(string.Format("{0}{1}({2:0.0000})", peptide_site, aa, mass));
+                        assignedGlycPositions.Add(peptide_site - 1);
 
                         // edit modified peptide col
-                        string originalModPeptide = existingPSMline[this.ModifiedPeptideCol];
-                        if (originalModPeptide.Length == 0)
-                        {
-                            originalModPeptide = peptide;   // no modified peptide is written if no previous mods. Start with base sequence
-                        }
-                        int residueIndex = -1;
-                        for (int i = 0; i < originalModPeptide.Length; i++)
-                        {
-                            if (originalModPeptide[i] >= 'A' && originalModPeptide[i] <= 'Z')
-                            {
-                                // this is an actual residue, increment residue counter
-                                residueIndex++;
-                            }
-                            if (residueIndex == peptide_site)
-                            {
-                                // Found the glycan location - insert new mod and stop looking
-                                double aaMass = Proteomics.AminoAcidPolymer.Residue.GetResidue(aa).MonoisotopicMass;
-                                string modToInsert = String.Format("[{0:0}]", mass + aaMass);
-                                string newModPep = originalModPeptide.Insert(i, modToInsert);
-                                existingPSMline[this.ModifiedPeptideCol] = newModPep;
-                                break;
-                            }
-                        }
+                        existingPSMline = EditModifiedPeptide(existingPSMline, peptide, mass, peptide_site, aa);
                     }
                     else
                     {
@@ -234,15 +214,33 @@ namespace PTMLocalization
                 // handle unlocalized glycan(s) writing to assigned mods
                 if (hasUnlocalizedGlycs)
                 {
-                    newAssignedMods.Sort();
                     // at least one unlocalized glycan present. Determine total unlocalized mass
                     double unlocMass = Glycan.GetMass(unlocalizedGlycanComp) * 0.00001;
                     opairGlycanMass += unlocMass;
+                    // find first available site
+                    int firstAvailable = -1;
+                    for (int i = 0; i < peptide.Length; i++)
+                    {
+                        if (peptide[i] == 'S' || peptide[i] == 'T')
+                        {
+                            if (!assignedGlycPositions.Contains(i))
+                            {
+                                // found available position. Place here and stop
+                                firstAvailable = i;
+                                break;
+                            }
+                        }
+                    }
+                    if (firstAvailable == -1)
+                    {
+                        // no unoccupied sites. Can happen, especially if there is an N-glycan on the peptide too. Place on first occupied site.
+                        firstAvailable = assignedGlycPositions[0];
+                    }
                     // add total unlocalized mass as an assigned mod
-                    newAssignedMods.Insert(0, string.Format("{0:0.0000}", unlocMass));      // put the unlocalized mod first
-                } else
-                {
-                    newAssignedMods.Sort();
+                    string aa = peptide.Substring(firstAvailable, 1);
+                    newAssignedMods.Add(string.Format("{0}{1}({2:0.0000})", firstAvailable + 1, aa, unlocMass));
+                    // also add to modified peptide
+                    existingPSMline = EditModifiedPeptide(existingPSMline, peptide, unlocMass, firstAvailable + 1, aa);
                 }
 
                 // write final mods back to assigned mods column
@@ -265,6 +263,34 @@ namespace PTMLocalization
             }
 
             return String.Join("\t", existingPSMline);
+        }
+
+        private List<string> EditModifiedPeptide(List<string> existingPSMline, string peptide, double mass, int peptide_site, string aa)
+        {
+            string originalModPeptide = existingPSMline[this.ModifiedPeptideCol];
+            if (originalModPeptide.Length == 0)
+            {
+                originalModPeptide = peptide;   // no modified peptide is written if no previous mods. Start with base sequence
+            }
+            int residueIndex = -1;
+            for (int i = 0; i < originalModPeptide.Length; i++)
+            {
+                if (originalModPeptide[i] >= 'A' && originalModPeptide[i] <= 'Z')
+                {
+                    // this is an actual residue, increment residue counter
+                    residueIndex++;
+                }
+                if (residueIndex == peptide_site)
+                {
+                    // Found the glycan location - insert new mod and stop looking
+                    double aaMass = Proteomics.AminoAcidPolymer.Residue.GetResidue(aa).MonoisotopicMass;
+                    string modToInsert = String.Format("[{0:0}]", mass + aaMass);
+                    string newModPep = originalModPeptide.Insert(i, modToInsert);
+                    existingPSMline[this.ModifiedPeptideCol] = newModPep;
+                    break;
+                }
+            }
+            return existingPSMline;
         }
 
         // check if this PSM table has previously had OPair results written by looking for O-Pair column headers
