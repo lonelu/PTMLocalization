@@ -503,30 +503,34 @@ namespace PTMLocalization
                     string[] massSplits = split.Split("(");
                     string residueType;
                     int position;
+                    string locationRestriction;
                     // handle terminal mods as well
                     if (split.Contains("N-term"))
                     {
-                        // terminal mod, position and residue type are different (encoding as the terminal residue, not the terminus, because I don't know the syntax for the terminus)
-                        residueType = peptide[0].ToString();
-                        position = 0;
+                        // N-terminal mod. Set position to -1 and residue type to "X"
+                        residueType = "X";
+                        position = -1;
+                        locationRestriction = "Peptide N-terminal.";
                     } 
                     else if (split.Contains("C-term"))
                     {
-                        // terminal mod, position and residue type are different (encoding as the terminal residue, not the terminus, because I don't know the syntax for the terminus)
-                        residueType = peptide[peptide.Length - 1].ToString();
-                        position = peptide.Length - 1;
+                        // C-terminal mod. Set position to peptide length and residue type to "X"
+                        residueType = "X";
+                        position = peptide.Length;
+                        locationRestriction = "Peptide C-terminal.";
                     }
                     else
                     {
                         residueType = massSplits[0][massSplits[0].Length - 1].ToString();
                         position = Int32.Parse(massSplits[0].Substring(0, massSplits[0].Length - 1)) - 1;   // MSFragger mod positions are 1-indexed, convert to 0-index
+                        locationRestriction = "Anywhere.";
                     }
-                    
+
                     double mass = double.Parse(massSplits[1].Replace(")", ""));
                     string modName = "(" + massSplits[1];
                     // Generate a Modification of type "MSFragger" with ID "(mass)" 
                     ModificationMotif.TryGetMotif(residueType, out ModificationMotif motif2);
-                    Modification mod = new Modification(_originalId: modName, _modificationType: modType, _target: motif2, _locationRestriction: "Anywhere.", _monoisotopicMass: mass);
+                    Modification mod = new Modification(_originalId: modName, _modificationType: modType, _target: motif2, _locationRestriction: locationRestriction, _monoisotopicMass: mass);
                     modDefinitionDict.TryAdd(mod.IdWithMotif, mod);     // ignore if this mod definition is already present
                     modsForPeptideSeqDict[position] = string.Format("[{0}:{1}]", modType, mod.IdWithMotif);
                 }

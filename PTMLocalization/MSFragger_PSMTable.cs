@@ -117,6 +117,12 @@ namespace PTMLocalization
         public static PeptideWithSetModifications GetMSFraggerPeptide(string baseSequence, Dictionary<int, string> modPositions, Dictionary<string, Proteomics.Modification> modDefinitions)
         {
             StringBuilder sb = new();
+            // add N-term mod
+            if (modPositions.ContainsKey(-1))
+            {
+                sb.Append(modPositions[-1]);
+            }
+            // add all sequence mods
             for (int i = 0; i < baseSequence.Length; i++)
             {
                 // add base sequence residue
@@ -126,6 +132,11 @@ namespace PTMLocalization
                     // there is a mod at this position, place it as well
                     sb.Append(modPositions[i]);
                 }
+            }
+            // add C-term mod
+            if (modPositions.ContainsKey(baseSequence.Length))
+            {
+                sb.Append(modPositions[baseSequence.Length]);
             }
             string peptideWithMods = sb.ToString();
             PeptideWithSetModifications finalPeptide = new PeptideWithSetModifications(peptideWithMods, modDefinitions);
