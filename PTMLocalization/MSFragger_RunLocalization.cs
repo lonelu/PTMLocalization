@@ -483,11 +483,15 @@ namespace PTMLocalization
                         iDLow++;
                         continue;
                     }
-                    LocalizationGraph localizationGraph = new LocalizationGraph(_modPos, modMotifs, GlycanBox.OGlycanBoxes[iDLow], GlycanBox.OGlycanBoxes[iDLow].ChildGlycanBoxes, iDLow);
-                    LocalizationGraph.LocalizeMod(localizationGraph, ms2Scan, ProductMassTolerance,
-                        products.Where(v => v.ProductType == ProductType.c || v.ProductType == ProductType.zDot).ToList(),
-                        GlycoPeptides.GetLocalFragmentGlycan, GlycoPeptides.GetUnlocalFragmentGlycan);
-                    graphs.Add(localizationGraph);
+                    // only consider possibilities with enough sites on the peptide to accomodate all glycans
+                    if (_modPos.Length >= GlycanBox.OGlycanBoxes[iDLow].OGlycanCount)
+                    {
+                        LocalizationGraph localizationGraph = new LocalizationGraph(_modPos, modMotifs, GlycanBox.OGlycanBoxes[iDLow], GlycanBox.OGlycanBoxes[iDLow].ChildGlycanBoxes, iDLow);
+                        LocalizationGraph.LocalizeMod(localizationGraph, ms2Scan, ProductMassTolerance,
+                            products.Where(v => v.ProductType == ProductType.c || v.ProductType == ProductType.zDot).ToList(),
+                            GlycoPeptides.GetLocalFragmentGlycan, GlycoPeptides.GetUnlocalFragmentGlycan);
+                        graphs.Add(localizationGraph);
+                    }
                     iDLow++;
                 }
             }
