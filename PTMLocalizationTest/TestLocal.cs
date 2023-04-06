@@ -187,8 +187,9 @@ namespace PTMLocalizationTest
             string glycoDatabase = GlobalVariables.OGlycanLocations.Where(p => p.Contains("OGlycan.gdb")).First();
             int maxNumGlycans = 3;
             int[] isotopes = { 0, 1, 2 };
+            bool filterOxonium = false;
 
-            var localizer = new MSFragger_RunLocalization(psmFile, scanpairFile, rawfileDirectory, null, glycoDatabase, maxNumGlycans, PrecursorMassTolerance, ProductMassTolerance, isotopes);
+            var localizer = new MSFragger_RunLocalization(psmFile, scanpairFile, rawfileDirectory, null, glycoDatabase, maxNumGlycans, PrecursorMassTolerance, ProductMassTolerance, isotopes, filterOxonium);
             localizer.Localize();
         }
 

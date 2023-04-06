@@ -1,5 +1,6 @@
 ﻿using Chemistry;
 using MassSpectrometry;
+using Nett;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -32,38 +33,73 @@ namespace EngineLayer
         }
 
         /**
-         * Compute oxonium intensity ratio (e.g. 138/144) for this scan. Ratio computed as sum of all peak intensities within m/z
-         * tolerance, rather than only nearest peak. 
+         * Compute oxonium intensity ratio (e.g. 138/144) for this scan. 
          */
-        public double computeOxoRatio(double numeratorMass, double denominatorMass, double tolerancePPM)
+        public double ComputeOxoRatio(double numeratorMass, double denominatorMass, double tolerancePPM)
         {
-            double ratio = 0;
-            double numerator = 0;
-            double denominator = 0;
-            double maxMass = Math.Max(numeratorMass, denominatorMass) + Math.Max(numeratorMass, denominatorMass) * tolerancePPM * 0.000_001;
-            double numeratorPPMrange = tolerancePPM * 0.000_001 * numeratorMass;
-            double denominatorPPMrange = tolerancePPM * 0.000_001 * denominatorMass;
+            double ratio = -1;
+            GetClosestExperimentalFragmentMzWithinTol(numeratorMass, tolerancePPM, out double? numerator);
+            GetClosestExperimentalFragmentMzWithinTol(denominatorMass, tolerancePPM, out double? denominator);
 
+            if (denominator.HasValue)
+            {
+                ratio = (double)(numerator / denominator);
+            } 
+            return ratio;
+        }
+
+        /**
+         * Determine if a given set of oxonium ions are found in the scan, within the provided PPM tolerance. 
+         * Dictionaries are intended to use the "kind" index identifier for monosaccharides from monosaccharides.tsv. 
+         * Returns true for a given kind if any of the corresponding ions are found. 
+         */
+        public Dictionary<int, bool> findOxoniums(Dictionary<int, List<int>> oxoniumIonsForKinds, double tolerancePPM)
+        {
+            Dictionary<int, bool> oxoniumsFound = new();
+            foreach (KeyValuePair<int, List<int>> oxoniumEntry in oxoniumIonsForKinds) 
+            {
+                oxoniumsFound[oxoniumEntry.Key] = false;
+                foreach (int mz in oxoniumEntry.Value)
+                {
+                    GetClosestExperimentalFragmentMzWithinTol(mz * 0.000_01, tolerancePPM, out double? intensity);
+                    if (intensity.HasValue)
+                    {
+                        oxoniumsFound[oxoniumEntry.Key] = true;
+                        break;
+                    }
+                }
+            }
+            return oxoniumsFound;
+        }
+
+        public void testGetFragmentInt(double mass)
+        {
+            double ppmTol = 20.0;
+            double numeratorPPMrange = ppmTol * 0.000_001 * mass;
+
+            // existing code with bin search
+            double? intensity;
+            double? intensity2;
+            double? nearestMass = GetClosestExperimentalFragmentMz(mass, out intensity);
+            double? nearestMassWtol = GetClosestExperimentalFragmentMzWithinTol(mass, 20, out intensity2);
+
+            // manual
+            double intensityManual = 0;
             for (int i = 0; i < TheScan.MassSpectrum.XArray.Length; i++)
             {
-                if (TheScan.MassSpectrum.XArray[i] > maxMass)
+                if (TheScan.MassSpectrum.XArray[i] > mass + 1)
                 {
                     break;
                 }
-                if (Math.Abs(TheScan.MassSpectrum.XArray[i] - numeratorMass) < numeratorPPMrange)
+                if (Math.Abs(TheScan.MassSpectrum.XArray[i] - mass) < numeratorPPMrange)
                 {
-                    numerator += TheScan.MassSpectrum.YArray[i];
-                }
-                if (Math.Abs(TheScan.MassSpectrum.XArray[i] - denominatorMass) < denominatorPPMrange)
-                {
-                    denominator += TheScan.MassSpectrum.YArray[i];
+                    intensityManual += TheScan.MassSpectrum.YArray[i];
                 }
             }
-            if (denominator > 0)
+            if (Math.Abs((double)(intensityManual - intensity)) > 1)
             {
-                ratio = numerator / denominator;
-            } 
-            return ratio;
+                Console.WriteLine(String.Format("Diff of %f, auto mz %f, scan %d", intensityManual - intensity, nearestMass, TheScan.OneBasedScanNumber));
+            }
         }
 
 
@@ -184,6 +220,33 @@ namespace EngineLayer
             }
             IsotopicEnvelope[] isotopicEnvelopes = ExperimentalFragments.Skip(startIndex).Take(length).ToArray();
             return isotopicEnvelopes;
+        }
+
+        /**
+         * Like GetClosestExperimentalFragment but restricted to a given tolerance (ppm) around the theoretical m/z. Returns null
+         * if no peaks found or if the closest peak is outside the tolerance. 
+         */
+        public double? GetClosestExperimentalFragmentMzWithinTol(double theoreticalMz, double tolerancePPM, out double? intensity)
+        {
+            double? mass = GetClosestExperimentalFragmentMz(theoreticalMz, out intensity);
+            double numeratorPPMrange = tolerancePPM * 0.000_001 * theoreticalMz;
+            if (mass.HasValue)
+            {
+                if (Math.Abs((double)(mass - theoreticalMz)) <= numeratorPPMrange)
+                {
+                    return intensity;
+                }
+                else
+                {
+                    intensity = null;
+                    return null;
+                }
+            } 
+            else
+            {
+                intensity = null;
+                return null;
+            }
         }
 
         public double? GetClosestExperimentalFragmentMz(double theoreticalMz, out double? intensity)

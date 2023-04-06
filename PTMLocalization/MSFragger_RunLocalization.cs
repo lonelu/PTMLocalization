@@ -12,6 +12,7 @@ using MassSpectrometry;
 using EngineLayer;
 using System.IO;
 using System.Text.RegularExpressions;
+using System.Numerics;
 
 namespace PTMLocalization
 {
@@ -26,6 +27,7 @@ namespace PTMLocalization
         private readonly string o_glycan_database;
         private int maxOGlycansPerPeptide;
         private int[] isotopes;
+        private bool filterOxonium;
 
         private Dictionary<string, string> lcmsPaths;
         private MsDataFile currentMsDataFile;
@@ -33,6 +35,7 @@ namespace PTMLocalization
         private string currentRawfileBase;
         private Dictionary<int, MsDataScan> msScans;
         private List<string> output;
+        private Dictionary<int, List<int>> oxoniumIonsForKinds;
 
         public static readonly double AveragineIsotopeMass = 1.00235;
         public static readonly string OPAIR_HEADERS = "O-Pair Score\tNumber of Glycans\tTotal Glycan Composition\tGlycan Site Composition(s)\tConfidence Level\tSite Probabilities\t138/144 Ratio\tHas N-Glyc Sequon\tPaired Scan Num";
@@ -49,7 +52,7 @@ namespace PTMLocalization
         private static readonly double OXO144 = 144.06552;
         private static readonly Regex NglycMotifRegex = new Regex("N[^P][ST]", RegexOptions.Compiled);
 
-        public MSFragger_RunLocalization(string _psmFile, string _scanpairFile, string _rawfilesDirectory, string lcmsFileList, string _o_glycan_database_path, int _maxOGlycansPerPeptide, Tolerance _PrecursorMassTolerance, Tolerance _ProductMassTolerance, int[] _isotopes)
+        public MSFragger_RunLocalization(string _psmFile, string _scanpairFile, string _rawfilesDirectory, string lcmsFileList, string _o_glycan_database_path, int _maxOGlycansPerPeptide, Tolerance _PrecursorMassTolerance, Tolerance _ProductMassTolerance, int[] _isotopes, bool _filterOxonium)
         {
             psmFile = _psmFile;
             scanpairFile = _scanpairFile;
@@ -60,9 +63,11 @@ namespace PTMLocalization
             ProductMassTolerance = _ProductMassTolerance;
             maxOGlycansPerPeptide = _maxOGlycansPerPeptide;
             isotopes = _isotopes;
+            filterOxonium = _filterOxonium;
 
             msScans = new();
             output = new();
+            oxoniumIonsForKinds = new();
 
             Setup();
         }
@@ -76,6 +81,13 @@ namespace PTMLocalization
             GlycanBox.GlobalOGlycans = GlycanDatabase.LoadGlycan(o_glycan_database, true, true).ToArray();
             GlycanBox.GlobalOGlycanMods = GlycanBox.BuildGlobalOGlycanMods(GlycanBox.GlobalOGlycans).ToArray();
             GlycanBox.OGlycanBoxes = GlycanBox.BuildGlycanBoxes(maxOGlycansPerPeptide, GlycanBox.GlobalOGlycans, GlycanBox.GlobalOGlycanMods).OrderBy(p => p.Mass).ToArray();
+
+            // todo: replace with reading from monosaccharides.tsv
+            if (filterOxonium)
+            {
+                oxoniumIonsForKinds.Add(2, new List<int> { 27409268, 29210324 });   // NeuAc
+                oxoniumIonsForKinds.Add(3, new List<int> { 29008759, 30809816 });   // NeuGc
+            }
         }
 
         private bool CheckAndLoadData(string rawfileBase, string rawfileName, Dictionary<string, bool> mzmlNotFoundWarnings, bool usingLcmsFilePath)
@@ -396,12 +408,15 @@ namespace PTMLocalization
                 PeptideWithSetModifications peptideWithMods = getPeptideWithMSFraggerMods(assignedMods, peptide);
 
                 // get oxo 138/144 ratio from the HCD scan
+                Dictionary<int, bool> oxoniumsToFilter = new ();
                 double ratio;
                 try
                 {
                     MsDataScan hcdDataScan = msScans[scanNum];
                     var hcdScan = new Ms2ScanWithSpecificMass(hcdDataScan, precursorMZ, precursorCharge, currentRawfile, 4, 3, neutralExperimentalFragments);
-                    ratio = hcdScan.computeOxoRatio(OXO138, OXO144, ProductMassTolerance.Value);
+                    ratio = hcdScan.ComputeOxoRatio(OXO138, OXO144, ProductMassTolerance.Value);
+                    // todo: add parameter
+                    oxoniumsToFilter = hcdScan.findOxoniums(oxoniumIonsForKinds, ProductMassTolerance.Value);
                 }
                 catch (KeyNotFoundException)
                 {
@@ -410,7 +425,7 @@ namespace PTMLocalization
                 }
 
                 // finally, run localizer
-                GlycoSpectralMatch gsm = LocalizeOGlyc(scan, peptideWithMods, deltaMass, ratio);
+                GlycoSpectralMatch gsm = LocalizeOGlyc(scan, peptideWithMods, deltaMass, ratio, oxoniumsToFilter);
 
                 // write info back to PSM table
                 output.Add(PSMtable.editPSMLine(gsm, lineSplits.ToList(), GlycanBox.GlobalOGlycans, overwritePrevious, true));
@@ -426,7 +441,7 @@ namespace PTMLocalization
         /**
          * Single scan O-glycan localization, given a peptide and glycan mass from MSFragger search
          */
-        public GlycoSpectralMatch LocalizeOGlyc(Ms2ScanWithSpecificMass ms2Scan, PeptideWithSetModifications peptide, double glycanDeltaMass, double oxoRatio)
+        public GlycoSpectralMatch LocalizeOGlyc(Ms2ScanWithSpecificMass ms2Scan, PeptideWithSetModifications peptide, double glycanDeltaMass, double oxoRatio, Dictionary<int, bool> oxoniumBools)
         {
             // generate peptide fragments
             List<Product> products = new List<Product>();
@@ -453,6 +468,21 @@ namespace PTMLocalization
 
                 while (iDLow < GlycanBox.OGlycanBoxes.Length && GlycanBox.OGlycanBoxes[iDLow].Mass <= possibleGlycanMassHigh)
                 {
+                    // filter based on oxonium ions if requested
+                    bool oxoFilter = false;
+                    foreach (KeyValuePair<int, bool> oxoEntry in oxoniumBools) { 
+                        if (GlycanBox.OGlycanBoxes[iDLow].Kind[oxoEntry.Key] > 0 && !oxoniumBools[oxoEntry.Key])
+                        {
+                            // the monosaccharide is present in the GlycanBox, but required oxonium ion(s) were not detected: skip
+                            oxoFilter = true; 
+                            break;
+                        }
+                    }
+                    if (oxoFilter)
+                    {
+                        iDLow++;
+                        continue;
+                    }
                     LocalizationGraph localizationGraph = new LocalizationGraph(_modPos, modMotifs, GlycanBox.OGlycanBoxes[iDLow], GlycanBox.OGlycanBoxes[iDLow].ChildGlycanBoxes, iDLow);
                     LocalizationGraph.LocalizeMod(localizationGraph, ms2Scan, ProductMassTolerance,
                         products.Where(v => v.ProductType == ProductType.c || v.ProductType == ProductType.zDot).ToList(),
