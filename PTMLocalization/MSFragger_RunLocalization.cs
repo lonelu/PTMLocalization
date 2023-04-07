@@ -470,6 +470,7 @@ namespace PTMLocalization
 
             // Get possible O-glycan boxes from delta mass
             List<LocalizationGraph> graphs = new List<LocalizationGraph>();
+            bool oxoFilteredOut = false;
             foreach (int isotope in isotopes)
             {
                 // include peptide mass for PPM calculation between precursor and glycan delta mass
@@ -494,6 +495,7 @@ namespace PTMLocalization
                     if (oxoFilter)
                     {
                         iDLow++;
+                        oxoFilteredOut = true;
                         continue;
                     }
                     // only consider possibilities with enough sites on the peptide to accomodate all glycans
@@ -516,8 +518,16 @@ namespace PTMLocalization
                 // no matching glycan boxes found to this delta mass, no localization can be done! 
                 gsm = new GlycoSpectralMatch();
                 // keep the psm line the same length as all other outputs
-                gsm.localizerOutput = "No match to glycan delta mass" + EMPTY_OUTPUT_WITH_PAIRED_SCAN + string.Format("\t{0}", ms2Scan.TheScan.OneBasedScanNumber);
-                return gsm;      
+                if (oxoFilteredOut)
+                {
+                    // filtered out a possible match - note that
+                    gsm.localizerOutput = "No match after oxonium filtering" + EMPTY_OUTPUT_WITH_PAIRED_SCAN + string.Format("\t{0}", ms2Scan.TheScan.OneBasedScanNumber);
+                }
+                else
+                {
+                    gsm.localizerOutput = "No match to glycan delta mass" + EMPTY_OUTPUT_WITH_PAIRED_SCAN + string.Format("\t{0}", ms2Scan.TheScan.OneBasedScanNumber);
+                }
+                    return gsm;      
             }
             var best_graph = graphs.OrderByDescending(p => p.TotalScore).First();
             gsm = new GlycoSpectralMatch(new List<LocalizationGraph> { best_graph }, GlycoType.OGlycoPep);
