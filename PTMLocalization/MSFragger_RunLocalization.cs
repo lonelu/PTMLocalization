@@ -116,14 +116,19 @@ namespace PTMLocalization
             {
                 try
                 {
+                    // TEMP/TODO: fix when the cal mzML is not loaded correctly
+                    if (spectraFile.Contains("_calibrated"))
+                    {
+                        spectraFile = spectraFile.Replace("_calibrated", "");
+                    }
                     MsDataFile dataFile = Mzml.LoadAllStaticData(spectraFile, filter, searchForCorrectMs1PrecursorScan: false);
                     return dataFile;
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine(String.Format("Error loading mzML file {0}", spectraFile));
-                    Console.Write(ex.ToString());
-                    return null;
+                    Console.Write("\nError loading calibrated mzML file, loading base mzML...");
+                    //Console.WriteLine(String.Format("Error loading mzML file {0}", spectraFile));
+                    //Console.Write(ex.ToString());
                 }
             }
             // fallback attempts to locate the raw file if not using a filelist from FragPipe
@@ -161,7 +166,16 @@ namespace PTMLocalization
             spectraFile = Path.Combine(rawfilesDirectory, rawfileName);
             if (File.Exists(spectraFile))
             {
-                return Mzml.LoadAllStaticData(spectraFile, filter, searchForCorrectMs1PrecursorScan: false);
+                try
+                {
+                    return Mzml.LoadAllStaticData(spectraFile, filter, searchForCorrectMs1PrecursorScan: false);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("\nError loading base mzML file! No Localization can be done - please check the data file and try again.");
+                    Console.WriteLine(ex.ToString());
+                    return null;
+                }
             }
             else
             {
@@ -306,9 +320,9 @@ namespace PTMLocalization
                 // load raw file and pairs table
                 string rawfileName = rawfileEntry.Key + CAL_INPUT_EXTENSION;
                 timer.Start();
-                Console.Write(String.Format("Loading MS file {0}...", rawfileName));
+                Console.Write(String.Format("\tLoading MS file {0}...", rawfileEntry.Key));
                 MsDataFile currentMsDataFile = CheckAndLoadData(rawfileEntry.Key, rawfileName, mzmlNotFoundWarnings, usingLcmsFilePath);
-                Console.Write(String.Format("done: {0}ms", timer.ElapsedMilliseconds));
+                Console.Write(String.Format(" {0:0.0}s\n", timer.ElapsedMilliseconds * 0.001));
                 timer.Reset();
                 if (currentMsDataFile == null)
                 {
@@ -324,6 +338,7 @@ namespace PTMLocalization
                 }
                 else
                 {
+                    timer.Start();
                     List<MsDataScan> allScans = currentMsDataFile.GetAllScansList();
                     string scanpairName = rawfileEntry.Key + ".pairs";
                     string pairsFile = Path.Combine(rawfilesDirectory, scanpairName);
@@ -346,6 +361,8 @@ namespace PTMLocalization
                                                     .Select(x => x.Value)
                                                     .ToList();
                     allOutput.AddRange(sortedPSMs);
+                    Console.WriteLine(String.Format("\t\t{0} PSMs analyzed in {1:0.0}s", sortedPSMs.Count, timer.ElapsedMilliseconds * 0.001));
+                    timer.Reset();
                 }
             }
 
