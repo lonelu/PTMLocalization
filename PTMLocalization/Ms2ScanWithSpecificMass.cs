@@ -37,14 +37,9 @@ namespace EngineLayer
          */
         public double ComputeOxoRatio(double numeratorMass, double denominatorMass, double tolerancePPM)
         {
-            double ratio = -1;
             GetClosestExperimentalFragmentMzWithinTol(numeratorMass, tolerancePPM, out double? numerator);
-            GetClosestExperimentalFragmentMzWithinTol(denominatorMass, tolerancePPM, out double? denominator);
-
-            if (denominator.HasValue)
-            {
-                ratio = (double)(numerator / denominator);
-            } 
+            GetClosestExperimentalFragmentMzWithinTol(denominatorMass, tolerancePPM, out double? denominator); 
+            double ratio = (double)(numerator / denominator);
             return ratio;
         }
 
@@ -62,7 +57,7 @@ namespace EngineLayer
                 foreach (int mz in oxoniumEntry.Value)
                 {
                     GetClosestExperimentalFragmentMzWithinTol(mz * 0.000_01, tolerancePPM, out double? intensity);
-                    if (intensity.HasValue)
+                    if (intensity > 0)
                     {
                         oxoniumsFound[oxoniumEntry.Key] = true;
                         break;
@@ -70,36 +65,6 @@ namespace EngineLayer
                 }
             }
             return oxoniumsFound;
-        }
-
-        public void testGetFragmentInt(double mass)
-        {
-            double ppmTol = 20.0;
-            double numeratorPPMrange = ppmTol * 0.000_001 * mass;
-
-            // existing code with bin search
-            double? intensity;
-            double? intensity2;
-            double? nearestMass = GetClosestExperimentalFragmentMz(mass, out intensity);
-            double? nearestMassWtol = GetClosestExperimentalFragmentMzWithinTol(mass, 20, out intensity2);
-
-            // manual
-            double intensityManual = 0;
-            for (int i = 0; i < TheScan.MassSpectrum.XArray.Length; i++)
-            {
-                if (TheScan.MassSpectrum.XArray[i] > mass + 1)
-                {
-                    break;
-                }
-                if (Math.Abs(TheScan.MassSpectrum.XArray[i] - mass) < numeratorPPMrange)
-                {
-                    intensityManual += TheScan.MassSpectrum.YArray[i];
-                }
-            }
-            if (Math.Abs((double)(intensityManual - intensity)) > 1)
-            {
-                Console.WriteLine(String.Format("Diff of %f, auto mz %f, scan %d", intensityManual - intensity, nearestMass, TheScan.OneBasedScanNumber));
-            }
         }
 
 
@@ -225,6 +190,7 @@ namespace EngineLayer
         /**
          * Like GetClosestExperimentalFragment but restricted to a given tolerance (ppm) around the theoretical m/z. Returns null
          * if no peaks found or if the closest peak is outside the tolerance. 
+         * Returns intensity of 0 for peaks not found. 
          */
         public double? GetClosestExperimentalFragmentMzWithinTol(double theoreticalMz, double tolerancePPM, out double? intensity)
         {
@@ -234,17 +200,17 @@ namespace EngineLayer
             {
                 if (Math.Abs((double)(mass - theoreticalMz)) <= numeratorPPMrange)
                 {
-                    return intensity;
+                    return mass;
                 }
                 else
                 {
-                    intensity = null;
+                    intensity = 0.0;
                     return null;
                 }
             } 
             else
             {
-                intensity = null;
+                intensity = 0.0;
                 return null;
             }
         }
