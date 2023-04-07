@@ -1,5 +1,6 @@
 ﻿using EngineLayer;
 using EngineLayer.GlycoSearch;
+using MathNet.Numerics.Distributions;
 using Proteomics.ProteolyticDigestion;
 using System;
 using System.Collections.Generic;
@@ -22,6 +23,7 @@ namespace PTMLocalization
             Headers = allLines[0].Split("\t");
             PSMdata = new List<string>(allLines);
             PSMdata.RemoveAt(0);    // remove header line
+            RawfilePSMDict = GetRawfilePSMDict();
 
             // init headers
             DeltaMassCol = GetColumnIndex("Delta Mass");
@@ -47,6 +49,8 @@ namespace PTMLocalization
         public string FilePath { get; set; }
         public string[] Headers { get; set; }
         public List<string> PSMdata { get; }
+        public Dictionary<string, List<int>> RawfileScanDict { get; set; }
+        public Dictionary<string, List<string>> RawfilePSMDict { get; set; }
 
         public int DeltaMassCol { get; set; }
         public int AssignedModCol { get; set; }
@@ -69,6 +73,38 @@ namespace PTMLocalization
                 }
             }
             return -1;
+        }
+
+        /**
+         * Generate a dictionary of scan num: PSM string for a given rawfile
+         */
+        public Dictionary<int, string> GetScanDict(string rawfile)
+        {
+            Dictionary<int, string> scanDict = new();
+            List<string> psms = RawfilePSMDict[rawfile];
+            foreach (string psm in psms)
+            {
+                string spectrum = psm.Split("\t")[0];
+                int scanNum = GetScanNum(spectrum);
+                scanDict[scanNum] = psm;  
+            }
+            return scanDict;
+        }
+
+        public Dictionary<string, List<string>> GetRawfilePSMDict()
+        {
+            Dictionary<string, List<string>> rawfilePSMDict = new();
+            foreach (string PSMline in PSMdata)
+            {
+                string spectrum = PSMline.Split("\t")[0];
+                string rawfile = GetRawFile(spectrum);
+                if (!rawfilePSMDict.ContainsKey(rawfile))
+                {
+                    rawfilePSMDict[rawfile] = new List<string>();
+                }
+                rawfilePSMDict[rawfile].Add(PSMline);
+            }
+            return rawfilePSMDict;
         }
 
         public static string GetRawFile(string spectrum)

@@ -12,7 +12,7 @@ using MassSpectrometry;
 using EngineLayer;
 using System.IO;
 using System.Text.RegularExpressions;
-using System.Numerics;
+using System.Threading.Tasks;
 
 namespace PTMLocalization
 {
@@ -30,11 +30,6 @@ namespace PTMLocalization
         private bool filterOxonium;
 
         private Dictionary<string, string> lcmsPaths;
-        private MsDataFile currentMsDataFile;
-        private string currentRawfile;
-        private string currentRawfileBase;
-        private Dictionary<int, MsDataScan> msScans;
-        private List<string> output;
         private Dictionary<int, List<int>> oxoniumIonsForKinds;
 
         public static readonly double AveragineIsotopeMass = 1.00235;
@@ -65,8 +60,6 @@ namespace PTMLocalization
             isotopes = _isotopes;
             filterOxonium = _filterOxonium;
 
-            msScans = new();
-            output = new();
             oxoniumIonsForKinds = new();
 
             Setup();
@@ -90,7 +83,7 @@ namespace PTMLocalization
             }
         }
 
-        private bool CheckAndLoadData(string rawfileBase, string rawfileName, Dictionary<string, bool> mzmlNotFoundWarnings, bool usingLcmsFilePath)
+        private MsDataFile CheckAndLoadData(string rawfileBase, string rawfileName, Dictionary<string, bool> mzmlNotFoundWarnings, bool usingLcmsFilePath)
         {
             // new rawfile: load scan data
             string spectraFile = null;
@@ -109,7 +102,7 @@ namespace PTMLocalization
             if (spectraFile == null)
             {
                 Console.WriteLine(String.Format("Error: could not find spectra file from FragPipe list for file {0}", rawfileBase));
-                return false;
+                return null;
             } 
 
             // init directory path if reading from LCMS file list rather than from raw directory
@@ -123,12 +116,14 @@ namespace PTMLocalization
             {
                 try
                 {
-                    currentMsDataFile = Mzml.LoadAllStaticData(spectraFile, filter, searchForCorrectMs1PrecursorScan: false);
-                    return true;
+                    MsDataFile dataFile = Mzml.LoadAllStaticData(spectraFile, filter, searchForCorrectMs1PrecursorScan: false);
+                    return dataFile;
                 }
                 catch (Exception ex)
                 {
-                    currentMsDataFile = null;
+                    Console.WriteLine(String.Format("Error loading mzML file {0}", spectraFile));
+                    Console.Write(ex.ToString());
+                    return null;
                 }
             }
             // fallback attempts to locate the raw file if not using a filelist from FragPipe
@@ -139,12 +134,11 @@ namespace PTMLocalization
                 filter = new FilteringParams();
                 try
                 {
-                    currentMsDataFile = Mgf.LoadAllStaticData(spectraFile, filter);
-                    return true;
+                    return Mgf.LoadAllStaticData(spectraFile, filter);
                 }
                 catch
                 {
-                    currentMsDataFile = null;
+                    return null;
                 }
             }
             else if (File.Exists(Path.Combine(rawfilesDirectory, rawfileBase + CAL_INPUT_EXTENSION_FALLBACK2)))
@@ -154,22 +148,20 @@ namespace PTMLocalization
                 filter = new FilteringParams();
                 try
                 {
-                    currentMsDataFile = Mgf.LoadAllStaticData(spectraFile, filter);
-                    return true;
+                    return Mgf.LoadAllStaticData(spectraFile, filter);
                 }
                 catch
                 {
-                    currentMsDataFile = null;
+                    return null;
                 }
             }
-
+            
             // no calibrated file (mzML/MGF) found (or loading failed), try falling back to raw mzML
             rawfileName = rawfileBase + ".mzML";
             spectraFile = Path.Combine(rawfilesDirectory, rawfileName);
             if (File.Exists(spectraFile))
             {
-                currentMsDataFile = Mzml.LoadAllStaticData(spectraFile, filter, searchForCorrectMs1PrecursorScan: false);
-                return true;
+                return Mzml.LoadAllStaticData(spectraFile, filter, searchForCorrectMs1PrecursorScan: false);
             }
             else
             {
@@ -178,7 +170,7 @@ namespace PTMLocalization
                     Console.WriteLine("Warning: no mzML found for file {0}, PSMs from this file will NOT be localized!", rawfileBase);
                     mzmlNotFoundWarnings.Add(rawfileBase, true);
                 }
-                return false;
+                return null;
             }
         }
 
@@ -265,6 +257,7 @@ namespace PTMLocalization
          */
         public int Localize()
         {
+            List<string> allOutput = new();
             Dictionary<int, int> scanPairs = new();
             bool usingLcmsFilePath = false;
             if (scanpairFile != null)
@@ -298,145 +291,148 @@ namespace PTMLocalization
                 // write headers to PSM table
                 GlycoSpectralMatch emptyMatch = new GlycoSpectralMatch();
                 emptyMatch.localizerOutput = OPAIR_HEADERS;
-                output.Add(PSMtable.editPSMLine(emptyMatch, PSMtable.Headers.ToList(), GlycanBox.GlobalOGlycans, overwritePrevious, false));
+                allOutput.Add(PSMtable.editPSMLine(emptyMatch, PSMtable.Headers.ToList(), GlycanBox.GlobalOGlycans, overwritePrevious, false));
             }
 
             Dictionary<string, bool> mzmlNotFoundWarnings = new();
             // timers and etc
             System.Diagnostics.Stopwatch timer = new();
             System.Diagnostics.Stopwatch totalTimer = new();
-            timer.Start();
             totalTimer.Start();
             int psmCount = 0;
 
-            foreach (string PSMline in PSMtable.PSMdata)
+            foreach (KeyValuePair<string, List<string>> rawfileEntry in PSMtable.RawfilePSMDict)
             {
-                if (timer.ElapsedMilliseconds > 10000)
+                // load raw file and pairs table
+                string rawfileName = rawfileEntry.Key + CAL_INPUT_EXTENSION;
+                timer.Start();
+                Console.Write(String.Format("Loading MS file {0}...", rawfileName));
+                MsDataFile currentMsDataFile = CheckAndLoadData(rawfileEntry.Key, rawfileName, mzmlNotFoundWarnings, usingLcmsFilePath);
+                Console.Write(String.Format("done: {0}ms", timer.ElapsedMilliseconds));
+                timer.Reset();
+                if (currentMsDataFile == null)
                 {
-                    Console.Write("\r\tprogress: {0}/{1} PSMs processed in {2:0.0} s", psmCount, PSMtable.PSMdata.Count, totalTimer.ElapsedMilliseconds * 0.001);
-                    timer.Restart();
-                }
-                psmCount++;
-
-                // Parse PSM information
-                string[] lineSplits = PSMline.Split("\t");
-                string spectrumString = lineSplits[PSMtable.SpectrumCol];
-                string peptide = lineSplits[PSMtable.PeptideCol];
-                double deltaMass = Double.Parse(lineSplits[PSMtable.DeltaMassCol]);
-                string assignedMods = lineSplits[PSMtable.AssignedModCol];
-                double precursorMZ = Double.Parse(lineSplits[PSMtable.PrecursorMZCol]);
-                if (deltaMass < 3.5 && deltaMass > -1.5)
-                {
-                    // unmodified peptide - no localization
+                    // No raw data found! Write empty output for these PSMs
                     GlycoSpectralMatch emptyGSM = new GlycoSpectralMatch();
                     emptyGSM.localizerOutput = EMPTY_OUTPUT;
-                    output.Add(PSMtable.editPSMLine(emptyGSM, lineSplits.ToList(), GlycanBox.GlobalOGlycans, overwritePrevious, false));
-                    continue;
-                }
-
-                // Load scan (and rawfile if necessary)
-                int scanNum = MSFragger_PSMTable.GetScanNum(spectrumString);
-                string rawfileBase = MSFragger_PSMTable.GetRawFile(spectrumString);
-                string scanpairName = rawfileBase + ".pairs";
-                int precursorCharge = MSFragger_PSMTable.GetScanCharge(spectrumString);
-                string rawfileName = rawfileBase + CAL_INPUT_EXTENSION;
-
-                if (!rawfileBase.Equals(currentRawfileBase))
-                {
-                    bool loadSuccess = CheckAndLoadData(rawfileBase, rawfileName, mzmlNotFoundWarnings, usingLcmsFilePath);
-                    if (!loadSuccess)
+                    List<string> output = new();
+                    foreach (string psmLine in rawfileEntry.Value)
                     {
-                        GlycoSpectralMatch emptyGSM = new GlycoSpectralMatch();
-                        emptyGSM.localizerOutput = EMPTY_OUTPUT;
-                        output.Add(PSMtable.editPSMLine(emptyGSM, lineSplits.ToList(), GlycanBox.GlobalOGlycans, overwritePrevious, false));
-                        continue;
+                        string[] lineSplits = psmLine.Split('\t');
+                        allOutput.Add(PSMtable.editPSMLine(emptyGSM, lineSplits.ToList(), GlycanBox.GlobalOGlycans, overwritePrevious, false));
                     }
-                    List<MsDataScan> allScans = currentMsDataFile.GetAllScansList();
-
-                    // save scans by scan number, since MGF file from MSFragger does not guarantee all scans will be saved
-                    msScans = new();
-                    foreach (MsDataScan currentScan in allScans)
-                    {
-                        msScans[currentScan.OneBasedScanNumber] = currentScan;
-                    }
-
-                    // load scan pair file if not done already
-                    if (scanpairFile == null)
-                    {
-                        string pairsFile = Path.Combine(rawfilesDirectory, scanpairName);
-                        scanPairs = MSFragger_PSMTable.ParseScanPairTable(pairsFile);
-                    }
-                    currentRawfile = rawfileName;
-                    currentRawfileBase = rawfileBase;
-                }
-
-                // retrieve the right child scan
-                int childScanNum;
-                if (scanPairs.ContainsKey(scanNum))
-                {
-                    childScanNum = scanPairs[scanNum];
                 }
                 else
                 {
-                    // no paired child scan found - do not attempt localization
-                    GlycoSpectralMatch emptyGSM = new GlycoSpectralMatch();
-                    emptyGSM.localizerOutput = "No paired scan" + EMPTY_OUTPUT;
-                    output.Add(PSMtable.editPSMLine(emptyGSM, lineSplits.ToList(), GlycanBox.GlobalOGlycans, overwritePrevious, false));
-                    continue;
+                    List<MsDataScan> allScans = currentMsDataFile.GetAllScansList();
+                    string scanpairName = rawfileEntry.Key + ".pairs";
+                    string pairsFile = Path.Combine(rawfilesDirectory, scanpairName);
+                    scanPairs = MSFragger_PSMTable.ParseScanPairTable(pairsFile);
+                    Dictionary<int, string> scanDict = PSMtable.GetScanDict(rawfileEntry.Key);
+                    Dictionary<int, string> output = new ();
+
+                    // localize all PSMs in parallel
+                    Parallel.ForEach(scanDict, psmEntry =>
+                    {
+                        string psmOutput = LocalizePSM(allScans, scanPairs, psmEntry.Value, PSMtable, overwritePrevious, rawfileName);
+                        lock (output) // to synchronize access to the dictionary
+                        {
+                            output.Add(psmEntry.Key, psmOutput);
+                        }
+                    });
+
+                    // save results back to output list
+                    List<string> sortedPSMs = output.OrderBy(x => x.Key)
+                                                    .Select(x => x.Value)
+                                                    .ToList();
+                    allOutput.AddRange(sortedPSMs);
                 }
-
-                // retrieve the child scan
-                MsDataScan ms2Scan;
-                try
-                {
-                    ms2Scan = msScans[childScanNum];
-                }
-                catch (KeyNotFoundException)
-                {
-                    Console.Out.WriteLine(String.Format("Error: MS2 scan {0} not found in the MGF file. No localization performed", childScanNum));
-                    GlycoSpectralMatch emptyGSM = new GlycoSpectralMatch();
-                    emptyGSM.localizerOutput = EMPTY_OUTPUT;
-                    output.Add(PSMtable.editPSMLine(emptyGSM, lineSplits.ToList(), GlycanBox.GlobalOGlycans, overwritePrevious, false));
-                    continue;
-                }
-
-                // finalize spectrum for search
-                IsotopicEnvelope[] neutralExperimentalFragments = Ms2ScanWithSpecificMass.GetNeutralExperimentalFragments(ms2Scan, 4, 3);
-                var scan = new Ms2ScanWithSpecificMass(ms2Scan, precursorMZ, precursorCharge, currentRawfile, 4, 3, neutralExperimentalFragments);
-
-                // initialize peptide with all non-glyco mods
-                PeptideWithSetModifications peptideWithMods = getPeptideWithMSFraggerMods(assignedMods, peptide);
-
-                // get oxo 138/144 ratio from the HCD scan
-                Dictionary<int, bool> oxoniumsToFilter = new ();
-                double ratio;
-                try
-                {
-                    MsDataScan hcdDataScan = msScans[scanNum];
-                    var hcdScan = new Ms2ScanWithSpecificMass(hcdDataScan, precursorMZ, precursorCharge, currentRawfile, 4, 3, neutralExperimentalFragments);
-                    ratio = hcdScan.ComputeOxoRatio(OXO138, OXO144, ProductMassTolerance.Value);
-                    // todo: add parameter
-                    oxoniumsToFilter = hcdScan.findOxoniums(oxoniumIonsForKinds, ProductMassTolerance.Value);
-                }
-                catch (KeyNotFoundException)
-                {
-                    Console.WriteLine(string.Format("Error: HCD scan {0} not found in file {1} (aka {2}), could not calculate 138/144 ratio", scanNum, currentRawfile, currentMsDataFile.SourceFile.FileName));
-                    ratio = -1;
-                }
-
-                // finally, run localizer
-                GlycoSpectralMatch gsm = LocalizeOGlyc(scan, peptideWithMods, deltaMass, ratio, oxoniumsToFilter);
-
-                // write info back to PSM table
-                output.Add(PSMtable.editPSMLine(gsm, lineSplits.ToList(), GlycanBox.GlobalOGlycans, overwritePrevious, true));
             }
-            // write output to PSM table
-            File.WriteAllLines(psmFile, output.ToArray());
+
+            File.WriteAllLines(psmFile, allOutput.ToArray());
             totalTimer.Stop();
             Console.WriteLine("\nFinished localization in {0:0.0} s", totalTimer.ElapsedMilliseconds * 0.001);
             return 0;
         }
 
+        private string LocalizePSM(List<MsDataScan> allScans, Dictionary<int, int> scanPairs, string PSMline, MSFragger_PSMTable PSMtable, bool overwritePrevious, string currentRawfile)
+        {
+            int scanNum = MSFragger_PSMTable.GetScanNum(PSMline);
+
+            // Parse PSM information
+            string[] lineSplits = PSMline.Split("\t");
+            string spectrumString = lineSplits[PSMtable.SpectrumCol];
+            string peptide = lineSplits[PSMtable.PeptideCol];
+            double deltaMass = Double.Parse(lineSplits[PSMtable.DeltaMassCol]);
+            string assignedMods = lineSplits[PSMtable.AssignedModCol];
+            double precursorMZ = Double.Parse(lineSplits[PSMtable.PrecursorMZCol]);
+            int precursorCharge = MSFragger_PSMTable.GetScanCharge(spectrumString);
+
+            if (deltaMass < 3.5 && deltaMass > -1.5)
+            {
+                // unmodified peptide - no localization
+                GlycoSpectralMatch emptyGSM = new GlycoSpectralMatch();
+                emptyGSM.localizerOutput = EMPTY_OUTPUT;
+                return PSMtable.editPSMLine(emptyGSM, lineSplits.ToList(), GlycanBox.GlobalOGlycans, overwritePrevious, false);
+            }
+
+            // retrieve the child scan num
+            int childScanNum;
+            if (scanPairs.ContainsKey(scanNum))
+            {
+                childScanNum = scanPairs[scanNum];
+            }
+            else
+            {
+                // no paired child scan found - do not attempt localization
+                GlycoSpectralMatch emptyGSM = new GlycoSpectralMatch();
+                emptyGSM.localizerOutput = "No paired scan" + EMPTY_OUTPUT;
+                return PSMtable.editPSMLine(emptyGSM, lineSplits.ToList(), GlycanBox.GlobalOGlycans, overwritePrevious, false);
+            }
+
+            // retrieve the child scan
+            MsDataScan ms2Scan;
+            try
+            {
+                ms2Scan = allScans[childScanNum];
+            }
+            catch (KeyNotFoundException)
+            {
+                Console.Out.WriteLine(String.Format("Error: MS2 scan {0} not found in the MGF file. No localization performed", childScanNum));
+                GlycoSpectralMatch emptyGSM = new GlycoSpectralMatch();
+                emptyGSM.localizerOutput = EMPTY_OUTPUT;
+                return PSMtable.editPSMLine(emptyGSM, lineSplits.ToList(), GlycanBox.GlobalOGlycans, overwritePrevious, false);
+            }
+
+            // finalize spectrum for search
+            IsotopicEnvelope[] neutralExperimentalFragments = Ms2ScanWithSpecificMass.GetNeutralExperimentalFragments(ms2Scan, 4, 3);
+            var scan = new Ms2ScanWithSpecificMass(ms2Scan, precursorMZ, precursorCharge, currentRawfile, 4, 3, neutralExperimentalFragments);
+
+            // initialize peptide with all non-glyco mods
+            PeptideWithSetModifications peptideWithMods = getPeptideWithMSFraggerMods(assignedMods, peptide);
+
+            // get oxo 138/144 ratio from the HCD scan
+            Dictionary<int, bool> oxoniumsToFilter = new();
+            double ratio;
+            try
+            {
+                MsDataScan hcdDataScan = allScans[scanNum];
+                var hcdScan = new Ms2ScanWithSpecificMass(hcdDataScan, precursorMZ, precursorCharge, currentRawfile, 4, 3, neutralExperimentalFragments);
+                ratio = hcdScan.ComputeOxoRatio(OXO138, OXO144, ProductMassTolerance.Value);
+                // todo: add parameter
+                oxoniumsToFilter = hcdScan.findOxoniums(oxoniumIonsForKinds, ProductMassTolerance.Value);
+            }
+            catch (KeyNotFoundException)
+            {
+                Console.WriteLine(string.Format("Error: HCD scan {0} not found in file {1}, could not calculate 138/144 ratio", scanNum, currentRawfile));
+                ratio = -1;
+            }
+
+            // finally, run localizer
+            GlycoSpectralMatch gsm = LocalizeOGlyc(scan, peptideWithMods, deltaMass, ratio, oxoniumsToFilter);
+            return PSMtable.editPSMLine(gsm, lineSplits.ToList(), GlycanBox.GlobalOGlycans, overwritePrevious, true);
+
+        }
 
         /**
          * Single scan O-glycan localization, given a peptide and glycan mass from MSFragger search
