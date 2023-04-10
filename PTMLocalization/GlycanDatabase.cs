@@ -2,17 +2,23 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-
+using System.Text.RegularExpressions;
 
 namespace EngineLayer
 {
 
     public static class GlycanDatabase
     {
+        // TODO: read from monosaccharides file in case it is changed!
+        //kinds = Monosaccharide.GetCharMassDic(GlobalVariables.Monosaccharides).Keys.ToString();
+        private static string kinds;
+        private static Regex SimpleKindPattern = new Regex(@"[NHAGFPSYCXUM][0-9]+");
+
         //Load Glycan. Generally, glycan-ions should be generated for N-Glycopepitdes which produce Y-ions; MS method couldn't produce o-glycan-ions.
         public static IEnumerable<Glycan> LoadGlycan(string filePath, bool ToGenerateIons, bool IsLoadOGlycan)
         {
             bool isKind = true;
+            bool isSimpleKind = false;
             using (StreamReader lines = new StreamReader(filePath))
             {
                 while(lines.Peek() != -1)
@@ -25,7 +31,14 @@ namespace EngineLayer
                     }
                     if (!line.Contains("HexNAc"))
                     {
-                        isKind = false;
+                        // Distinguish simple composition (e.g, N1H1A1) from pGlyco style stucts (e.g., (N(H(A)) )
+                        if (!line.Contains('('))
+                        {
+                            isSimpleKind = true;
+                        } else
+                        {
+                            isKind = false;
+                        }
                     }
                     break;
                 }
@@ -33,7 +46,14 @@ namespace EngineLayer
 
             if (isKind)
             {
-                return LoadKindGlycan(filePath, ToGenerateIons, IsLoadOGlycan);
+                if (isSimpleKind)
+                {
+                    return LoadSimpleKindGlycan(filePath, ToGenerateIons, IsLoadOGlycan);
+                }
+                else
+                {
+                    return LoadKindGlycan(filePath, ToGenerateIons, IsLoadOGlycan);
+                }
             }
             else
             {
@@ -76,6 +96,41 @@ namespace EngineLayer
             }
         }
 
+        //Load simple composition string. Example format: N1H1A1
+        public static IEnumerable<Glycan> LoadSimpleKindGlycan(string filePath, bool ToGenerateIons, bool IsOGlycanSearch)
+        {
+            using (StreamReader lines = new StreamReader(filePath))
+            {
+                int id = 1;
+                while (lines.Peek() != -1)
+                {
+                    string line = lines.ReadLine().Split('\t').First();
+
+                    if (line.Contains('#') || line.Contains("//"))
+                    {
+                        continue;
+                    }
+
+                    var kind = SimpleString2Kind(line);
+
+                    var glycan = new Glycan(kind);
+                    glycan.GlyId = id++;
+                    if (ToGenerateIons)
+                    {
+                        if (IsOGlycanSearch)
+                        {
+                            glycan.Ions = OGlycanCompositionCombinationChildIons(kind);
+                        }
+                        else
+                        {
+                            glycan.Ions = NGlycanCompositionFragments(kind);
+                        }
+                    }
+                    yield return glycan;
+                }
+            }
+        }
+
         public static byte[] String2Kind(string line)
         {
             byte[] kind = new byte[Glycan.SugarLength];
@@ -87,6 +142,29 @@ namespace EngineLayer
                 i = i + 2;
             }
 
+            return kind;
+        }
+
+        public static byte[] SimpleString2Kind(string line)
+        {
+            byte[] kind = new byte[Glycan.SugarLength];
+            Match matcher = SimpleKindPattern.Match(line);
+            while (matcher.Success)
+            {
+                string glycanToken = matcher.Value;
+                char glycanType = Char.Parse(glycanToken.Substring(0, 1));
+                int glycanCount = int.Parse(glycanToken.Substring(1));
+                if (Monosaccharide.GetSymbolIdDic(GlobalVariables.Monosaccharides).ContainsKey(glycanType))
+                {
+                     kind[Monosaccharide.GetSymbolIdDic(GlobalVariables.Monosaccharides)[glycanType]] = (byte)glycanCount;
+                }
+                else
+                {
+                    Console.WriteLine($"Invalid token {glycanToken} in line {line}. This line will be skipped");
+                    return new byte[Glycan.SugarLength];
+                }
+                matcher = matcher.NextMatch();
+            }
             return kind;
         }
 

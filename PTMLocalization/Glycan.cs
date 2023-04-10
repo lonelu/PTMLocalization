@@ -67,6 +67,15 @@ namespace EngineLayer
             }
             return nameId;
         }
+        public static Dictionary<char, byte> GetSymbolIdDic(Monosaccharide[] monosaccharides)
+        {
+            Dictionary<char, byte> symbolId = new();
+            foreach (var mono in monosaccharides)
+            {
+                symbolId.Add(mono.Symbol, mono.Id);
+            }
+            return symbolId;
+        }
     }
     public class GlycanIon
     {
