@@ -340,6 +340,12 @@ namespace PTMLocalization
                 {
                     timer.Start();
                     List<MsDataScan> allScans = currentMsDataFile.GetAllScansList();
+                    // Dictionary by scan number for lookup
+                    Dictionary<int, MsDataScan> dataScansDict = new();
+                    foreach (MsDataScan scan in allScans)
+                    {
+                        dataScansDict.Add(scan.OneBasedScanNumber, scan);
+                    }
                     string scanpairName = rawfileEntry.Key + ".pairs";
                     string pairsFile = Path.Combine(rawfilesDirectory, scanpairName);
                     scanPairs = MSFragger_PSMTable.ParseScanPairTable(pairsFile);
@@ -351,13 +357,13 @@ namespace PTMLocalization
                     double pct = 0;
                     Timer threadedTimer = new Timer(_ =>
                     {
-                        Console.Write($"\x000D\t\t[progress: {analyzedCount}/{scanDict.Count} ({pct}%)]");
-                    }, null, TimeSpan.Zero, TimeSpan.FromMilliseconds(10));
+                        Console.Write($"\x000D\t\t[progress: {analyzedCount}/{scanDict.Count} ({pct:0.0}%)]");
+                    }, null, TimeSpan.Zero, TimeSpan.FromSeconds(10));
 
                     // localize all PSMs in parallel
                     Parallel.ForEach(scanDict, psmEntry =>
                     {
-                        string psmOutput = LocalizePSM(allScans, scanPairs, psmEntry.Value, PSMtable, overwritePrevious, rawfileName);
+                        string psmOutput = LocalizePSM(dataScansDict, scanPairs, psmEntry.Value, PSMtable, overwritePrevious, rawfileName);
                         lock (output) // to synchronize access to the dictionary
                         {
                             output.Add(psmEntry.Key, psmOutput);
@@ -384,7 +390,7 @@ namespace PTMLocalization
             return 0;
         }
 
-        private string LocalizePSM(List<MsDataScan> allScans, Dictionary<int, int> scanPairs, string PSMline, MSFragger_PSMTable PSMtable, bool overwritePrevious, string currentRawfile)
+        private string LocalizePSM(Dictionary<int, MsDataScan> dataScansDict, Dictionary<int, int> scanPairs, string PSMline, MSFragger_PSMTable PSMtable, bool overwritePrevious, string currentRawfile)
         {
             int scanNum = MSFragger_PSMTable.GetScanNum(PSMline);
 
@@ -423,7 +429,7 @@ namespace PTMLocalization
             MsDataScan ms2Scan;
             try
             {
-                ms2Scan = allScans[childScanNum];
+                ms2Scan = dataScansDict[childScanNum];
             }
             catch (KeyNotFoundException)
             {
@@ -445,7 +451,7 @@ namespace PTMLocalization
             double ratio;
             try
             {
-                MsDataScan hcdDataScan = allScans[scanNum];
+                MsDataScan hcdDataScan = dataScansDict[scanNum];
                 var hcdScan = new Ms2ScanWithSpecificMass(hcdDataScan, precursorMZ, precursorCharge, currentRawfile, 4, 3, neutralExperimentalFragments);
                 ratio = hcdScan.ComputeOxoRatio(OXO138, OXO144, ProductMassTolerance.Value);
                 // todo: add parameter
