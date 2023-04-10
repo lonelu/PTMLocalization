@@ -116,11 +116,6 @@ namespace PTMLocalization
             {
                 try
                 {
-                    // TEMP/TODO: fix when the cal mzML is not loaded correctly
-                    if (spectraFile.Contains("_calibrated"))
-                    {
-                        spectraFile = spectraFile.Replace("_calibrated", "");
-                    }
                     MsDataFile dataFile = Mzml.LoadAllStaticData(spectraFile, filter, searchForCorrectMs1PrecursorScan: false);
                     return dataFile;
                 }
