@@ -13,6 +13,7 @@ using EngineLayer;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using System.Threading;
 
 namespace PTMLocalization
 {
@@ -70,6 +71,9 @@ namespace PTMLocalization
          */
         public void Setup()
         {
+            System.Diagnostics.Stopwatch timer = new();
+            Console.Write("Loading Glycan Database...");
+            timer.Start();
             GlobalVariables.SetUpGlobalVariables();
             GlycanBox.GlobalOGlycans = GlycanDatabase.LoadGlycan(o_glycan_database, true, true).ToArray();
             GlycanBox.GlobalOGlycanMods = GlycanBox.BuildGlobalOGlycanMods(GlycanBox.GlobalOGlycans).ToArray();
@@ -81,6 +85,8 @@ namespace PTMLocalization
                 oxoniumIonsForKinds.Add(2, new List<int> { 27409268, 29210324 });   // NeuAc
                 oxoniumIonsForKinds.Add(3, new List<int> { 29008759, 30809816 });   // NeuGc
             }
+            timer.Stop();
+            Console.WriteLine(String.Format("done in {0:0.0}s\n\tLoaded {1} glycans, {2} glycan boxes", timer.ElapsedMilliseconds * 0.001, GlycanBox.GlobalOGlycans.Length, GlycanBox.OGlycanBoxes.Length));
         }
 
         private MsDataFile CheckAndLoadData(string rawfileBase, string rawfileName, Dictionary<string, bool> mzmlNotFoundWarnings, bool usingLcmsFilePath)
@@ -308,7 +314,6 @@ namespace PTMLocalization
             System.Diagnostics.Stopwatch timer = new();
             System.Diagnostics.Stopwatch totalTimer = new();
             totalTimer.Start();
-            int psmCount = 0;
 
             foreach (KeyValuePair<string, List<string>> rawfileEntry in PSMtable.RawfilePSMDict)
             {
@@ -341,6 +346,14 @@ namespace PTMLocalization
                     Dictionary<int, string> scanDict = PSMtable.GetScanDict(rawfileEntry.Key);
                     Dictionary<int, string> output = new ();
 
+                    // timer for PSM progress
+                    int analyzedCount = 0;
+                    double pct = 0;
+                    Timer threadedTimer = new Timer(_ =>
+                    {
+                        Console.Write($"\x000D\t\t[progress: {analyzedCount}/{scanDict.Count} ({pct}%)]");
+                    }, null, TimeSpan.Zero, TimeSpan.FromMilliseconds(10));
+
                     // localize all PSMs in parallel
                     Parallel.ForEach(scanDict, psmEntry =>
                     {
@@ -348,15 +361,19 @@ namespace PTMLocalization
                         lock (output) // to synchronize access to the dictionary
                         {
                             output.Add(psmEntry.Key, psmOutput);
+                            analyzedCount++;
+                            pct = 100 * analyzedCount / (double) scanDict.Count;
                         }
                     });
+                    Console.Write($"\x000D\t\t[progress: {analyzedCount}/{scanDict.Count} ({pct}%)]");
+                    threadedTimer.Dispose();
 
                     // save results back to output list
                     List<string> sortedPSMs = output.OrderBy(x => x.Key)
                                                     .Select(x => x.Value)
                                                     .ToList();
                     allOutput.AddRange(sortedPSMs);
-                    Console.WriteLine(String.Format("\t\t{0} PSMs analyzed in {1:0.0}s", sortedPSMs.Count, timer.ElapsedMilliseconds * 0.001));
+                    Console.WriteLine(String.Format("...done. {0} PSMs analyzed in {1:0.0}s", sortedPSMs.Count, timer.ElapsedMilliseconds * 0.001));
                     timer.Reset();
                 }
             }
@@ -410,11 +427,11 @@ namespace PTMLocalization
             }
             catch (KeyNotFoundException)
             {
-                Console.Out.WriteLine(String.Format("Error: MS2 scan {0} not found in the MGF file. No localization performed", childScanNum));
+                Console.Out.WriteLine(String.Format("Error: MS2 scan {0} not found in the spectrum file. No localization performed", childScanNum));
                 GlycoSpectralMatch emptyGSM = new GlycoSpectralMatch();
                 emptyGSM.localizerOutput = EMPTY_OUTPUT;
                 return PSMtable.editPSMLine(emptyGSM, lineSplits.ToList(), GlycanBox.GlobalOGlycans, overwritePrevious, false);
-            }
+            } 
 
             // finalize spectrum for search
             IsotopicEnvelope[] neutralExperimentalFragments = Ms2ScanWithSpecificMass.GetNeutralExperimentalFragments(ms2Scan, 4, 3);
