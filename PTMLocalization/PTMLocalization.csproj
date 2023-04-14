@@ -51,6 +51,9 @@
     <None Update="Glycan_Mods\OGlycan\Olgycan Database 36 glycans with Mann.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="Glycan_Mods\OxoniumFilter.tsv">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="..\..\OPair_log.jpg">
       <Pack>True</Pack>
       <PackagePath></PackagePath>

@@ -47,8 +47,8 @@ namespace CMD
         [Option('o', HelpText = "[Optional] Output folder")]
         public string outputFolder { get; set; }
 
-        [Option('f', HelpText = "[Optional] Filter glycans based on oxonium ions observed")]
-        public bool oxoFilter { get; set; }
+        [Option('f', HelpText = "[Optional] If present, filter glycans based on oxonium ions observed. Uses default list if path to a tsv file is not provided")]
+        public string oxoFilter { get; set; }
 
         public override string ToString()
         {
@@ -61,7 +61,7 @@ namespace CMD
             x += " -n " + maxNumGlycans.ToString();
             x += " -i " + minIsotopeError.ToString(); 
             x += " -j " + maxIsotopeError.ToString();
-            x += " -f " + oxoFilter.ToString();
+            x += " -f " + oxoFilter;
             x += " -d " + rawfileDirectory;
             x += " -r " + lcmsFilesList;
             x += " -s " + psmFile;

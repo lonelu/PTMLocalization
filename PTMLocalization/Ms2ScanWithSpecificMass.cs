@@ -45,26 +45,26 @@ namespace EngineLayer
 
         /**
          * Determine if a given set of oxonium ions are found in the scan, within the provided PPM tolerance. 
-         * Dictionaries are intended to use the "kind" index identifier for monosaccharides from monosaccharides.tsv. 
-         * Returns true for a given kind if any of the corresponding ions are found. 
+         * For each provided FilterRule, checks that at least one required ion is found (true if so). 
+         * Returns a dictionary of rule: oxoniums found or not 
          */
-        public Dictionary<int, bool> findOxoniums(Dictionary<int, List<int>> oxoniumIonsForKinds, double tolerancePPM)
+        public Dictionary<FilterRule, bool> FindOxoniums(List<FilterRule> filterRules, double tolerancePPM)
         {
-            Dictionary<int, bool> oxoniumsFound = new();
-            foreach (KeyValuePair<int, List<int>> oxoniumEntry in oxoniumIonsForKinds) 
+            Dictionary<FilterRule, bool> outputBools = new();
+            foreach (FilterRule rule in filterRules) 
             {
-                oxoniumsFound[oxoniumEntry.Key] = false;
-                foreach (int mz in oxoniumEntry.Value)
+                outputBools[rule] = false;
+                foreach (double mz in rule.Masses)
                 {
-                    GetClosestExperimentalFragmentMzWithinTol(mz * 0.000_01, tolerancePPM, out double? intensity);
+                    GetClosestExperimentalFragmentMzWithinTol(mz, tolerancePPM, out double? intensity);
                     if (intensity > 0)
                     {
-                        oxoniumsFound[oxoniumEntry.Key] = true;
+                        outputBools[rule] = true;
                         break;
                     }
                 }
             }
-            return oxoniumsFound;
+            return outputBools;
         }
 
 

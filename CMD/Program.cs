@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using EngineLayer;
 using PTMLocalization;
+using Easy.Common.Extensions;
 
 namespace CMD
 {
@@ -51,12 +52,23 @@ namespace CMD
                 return errorCode;
             }
 
-            GlobalVariables.SetUpGlobalVariables();
+            bool doOxoFilter = settings.oxoFilter != null;
+            if (doOxoFilter)
+            {
+                if (settings.oxoFilter.Equals("default"))
+                {
+                    // set to null to use the default internal oxonium filter
+                    settings.oxoFilter = null;
+                }
+            }
+
+            // todo: add option for specifying monosaccharides.tsv (to replace the initial "null" here)
+            GlobalVariables.SetUpGlobalVariables(null, settings.oxoFilter);
 
             try
             {
                 var task = new Task();
-                errorCode = task.run_msfragger(settings.productPpmTol, settings.precursorPpmTol, settings.psmFile, settings.scanpairFile, settings.rawfileDirectory, settings.lcmsFilesList, settings.glycoDatabase, settings.maxNumGlycans, settings.minIsotopeError, settings.maxIsotopeError, settings.oxoFilter);
+                errorCode = task.run_msfragger(settings.productPpmTol, settings.precursorPpmTol, settings.psmFile, settings.scanpairFile, settings.rawfileDirectory, settings.lcmsFilesList, settings.glycoDatabase, settings.maxNumGlycans, settings.minIsotopeError, settings.maxIsotopeError, doOxoFilter);
                 if (errorCode == 0)
                 {
                     Console.WriteLine("Run finished.");
@@ -145,6 +157,23 @@ namespace CMD
             {
                 settings.glycoDatabase = settings.glycoDatabase.Trim();
             }
+
+            // oxonium filter setup and check
+            if (settings.oxoFilter != null)
+            {
+                // confirm the path exists if not using the default (internal) file
+                settings.oxoFilter = settings.oxoFilter.Trim();
+                if (!settings.oxoFilter.Equals("default"))
+                {
+                    settings.oxoFilter = settings.oxoFilter.Trim();
+                    if (!File.Exists (settings.oxoFilter))
+                    {
+                        Console.WriteLine(String.Format("Oxonium filter file {0} not found. Using default internal filter.", settings.oxoFilter));
+                        settings.oxoFilter = "default";
+                    }
+                }
+            }
+
             return true;
         }
 

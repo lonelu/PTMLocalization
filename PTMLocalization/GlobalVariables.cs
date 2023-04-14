@@ -1,4 +1,5 @@
 ﻿using Chemistry;
+using Easy.Common.Extensions;
 using MassSpectrometry;
 using Proteomics;
 using Proteomics.AminoAcidPolymer;
@@ -24,13 +25,15 @@ namespace EngineLayer
 
         public static List<string> NGlycanLocations { get; private set; }
 
-        public static void SetUpGlobalVariables()
+        public static List<FilterRule> OxoniumFilters {get; private set; }
+
+        public static void SetUpGlobalVariables(string? monosaccharidePath, string? oxoniumPath)
         {
             Loaders.LoadElements();
 
             SetUpDataDirectory();
 
-            LoadGlycans();
+            LoadGlycans(monosaccharidePath, oxoniumPath);
         }
 
         private static void SetUpDataDirectory()
@@ -49,10 +52,13 @@ namespace EngineLayer
 
         }
 
-        private static void LoadGlycans()
+        private static void LoadGlycans(string? monosaccharidePath, string? oxoniumPath)
         {
-            string monosaccharidePath = Path.Combine(DataDir, @"Glycan_Mods", @"Monosaccharide.tsv");
+            monosaccharidePath ??= Path.Combine(DataDir, @"Glycan_Mods", @"Monosaccharide.tsv");    // use default if not provided
             Monosaccharides = Monosaccharide.LoadMonosaccharide(monosaccharidePath);
+
+            oxoniumPath ??= Path.Combine(DataDir, @"Glycan_Mods", @"OxoniumFilter.tsv");            // use default if not provided
+            OxoniumFilters = FilterRule.LoadOxoniumFilters(oxoniumPath);
 
             OGlycanLocations = new List<string>();
             NGlycanLocations = new List<string>();

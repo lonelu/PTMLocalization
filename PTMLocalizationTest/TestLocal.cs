@@ -23,7 +23,7 @@ namespace PTMLocalizationTest
         [OneTimeSetUp]
         public static void Setup()
         {
-            GlobalVariables.SetUpGlobalVariables();
+            GlobalVariables.SetUpGlobalVariables(null, null);
             GlycanBox.GlobalOGlycans = GlycanDatabase.LoadGlycan(GlobalVariables.OGlycanLocations.Where(p => p.Contains("OGlycan.gdb")).First(), true, true).ToArray();
             GlycanBox.GlobalOGlycanMods = GlycanBox.BuildGlobalOGlycanMods(GlycanBox.GlobalOGlycans).ToArray();
             GlycanBox.OGlycanBoxes = GlycanBox.BuildGlycanBoxes(3, GlycanBox.GlobalOGlycans, GlycanBox.GlobalOGlycanMods).OrderBy(p => p.Mass).ToArray();

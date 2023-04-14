@@ -31,7 +31,6 @@ namespace PTMLocalization
         private bool filterOxonium;
 
         private Dictionary<string, string> lcmsPaths;
-        private Dictionary<int, List<int>> oxoniumIonsForKinds;
 
         public static readonly double AveragineIsotopeMass = 1.00235;
         public static readonly string OPAIR_HEADERS = "O-Pair Score\tNumber of Glycans\tTotal Glycan Composition\tGlycan Site Composition(s)\tConfidence Level\tSite Probabilities\t138/144 Ratio\tHas N-Glyc Sequon\tPaired Scan Num";
@@ -61,8 +60,6 @@ namespace PTMLocalization
             isotopes = _isotopes;
             filterOxonium = _filterOxonium;
 
-            oxoniumIonsForKinds = new();
-
             Setup();
         }
 
@@ -74,17 +71,10 @@ namespace PTMLocalization
             System.Diagnostics.Stopwatch timer = new();
             Console.Write("Loading Glycan Database...");
             timer.Start();
-            GlobalVariables.SetUpGlobalVariables();
             GlycanBox.GlobalOGlycans = GlycanDatabase.LoadGlycan(o_glycan_database, true, true).ToArray();
             GlycanBox.GlobalOGlycanMods = GlycanBox.BuildGlobalOGlycanMods(GlycanBox.GlobalOGlycans).ToArray();
             GlycanBox.OGlycanBoxes = GlycanBox.BuildGlycanBoxes(maxOGlycansPerPeptide, GlycanBox.GlobalOGlycans, GlycanBox.GlobalOGlycanMods).OrderBy(p => p.Mass).ToArray();
 
-            // todo: replace with reading from monosaccharides.tsv
-            if (filterOxonium)
-            {
-                oxoniumIonsForKinds.Add(2, new List<int> { 27409268, 29210324 });   // NeuAc
-                oxoniumIonsForKinds.Add(3, new List<int> { 29008759, 30809816 });   // NeuGc
-            }
             timer.Stop();
             Console.WriteLine(String.Format("done in {0:0.0}s\n\tLoaded {1} glycans, {2} glycan boxes", timer.ElapsedMilliseconds * 0.001, GlycanBox.GlobalOGlycans.Length, GlycanBox.OGlycanBoxes.Length));
         }
@@ -361,7 +351,9 @@ namespace PTMLocalization
                     }, null, TimeSpan.Zero, TimeSpan.FromSeconds(10));
 
                     // localize all PSMs in parallel
-                    Parallel.ForEach(scanDict, psmEntry =>
+                    ParallelOptions options = new();
+                    options.MaxDegreeOfParallelism = 1;
+                    Parallel.ForEach(scanDict, options, psmEntry =>
                     {
                         string psmOutput = LocalizePSM(dataScansDict, scanPairs, psmEntry.Value, PSMtable, overwritePrevious, rawfileName);
                         lock (output) // to synchronize access to the dictionary
@@ -447,7 +439,7 @@ namespace PTMLocalization
             PeptideWithSetModifications peptideWithMods = getPeptideWithMSFraggerMods(assignedMods, peptide);
 
             // get oxo 138/144 ratio from the HCD scan
-            Dictionary<int, bool> oxoniumsToFilter = new();
+            Dictionary<FilterRule, bool> oxoniumsToFilter = new();
             double ratio;
             try
             {
@@ -455,11 +447,11 @@ namespace PTMLocalization
                 var hcdScan = new Ms2ScanWithSpecificMass(hcdDataScan, precursorMZ, precursorCharge, currentRawfile, 4, 3, neutralExperimentalFragments);
                 ratio = hcdScan.ComputeOxoRatio(OXO138, OXO144, ProductMassTolerance.Value);
                 // todo: add parameter
-                oxoniumsToFilter = hcdScan.findOxoniums(oxoniumIonsForKinds, ProductMassTolerance.Value);
+                oxoniumsToFilter = hcdScan.FindOxoniums(GlobalVariables.OxoniumFilters, ProductMassTolerance.Value);
             }
             catch (KeyNotFoundException)
             {
-                Console.WriteLine(string.Format("Error: HCD scan {0} not found in file {1}, could not calculate 138/144 ratio", scanNum, currentRawfile));
+                Console.WriteLine(string.Format("Error: HCD scan {0} not found in file {1}, could not calculate oxonium ratio or use oxonium filter", scanNum, currentRawfile));
                 ratio = -1;
             }
 
@@ -472,7 +464,7 @@ namespace PTMLocalization
         /**
          * Single scan O-glycan localization, given a peptide and glycan mass from MSFragger search
          */
-        public GlycoSpectralMatch LocalizeOGlyc(Ms2ScanWithSpecificMass ms2Scan, PeptideWithSetModifications peptide, double glycanDeltaMass, double oxoRatio, Dictionary<int, bool> oxoniumBools)
+        public GlycoSpectralMatch LocalizeOGlyc(Ms2ScanWithSpecificMass ms2Scan, PeptideWithSetModifications peptide, double glycanDeltaMass, double oxoRatio, Dictionary<FilterRule, bool> oxoniumBools)
         {
             // generate peptide fragments
             List<Product> products = new List<Product>();
@@ -501,21 +493,14 @@ namespace PTMLocalization
                 while (iDLow < GlycanBox.OGlycanBoxes.Length && GlycanBox.OGlycanBoxes[iDLow].Mass <= possibleGlycanMassHigh)
                 {
                     // filter based on oxonium ions if requested
-                    bool oxoFilter = false;
-                    foreach (KeyValuePair<int, bool> oxoEntry in oxoniumBools) { 
-                        if (GlycanBox.OGlycanBoxes[iDLow].Kind[oxoEntry.Key] > 0 && !oxoniumBools[oxoEntry.Key])
-                        {
-                            // the monosaccharide is present in the GlycanBox, but required oxonium ion(s) were not detected: skip
-                            oxoFilter = true; 
-                            break;
-                        }
-                    }
-                    if (oxoFilter)
+                    bool oxoFilter = CheckOxoniumFilter(iDLow, oxoniumBools);
+                    if (!oxoFilter)
                     {
                         iDLow++;
                         oxoFilteredOut = true;
                         continue;
                     }
+
                     // only consider possibilities with enough sites on the peptide to accomodate all glycans
                     if (_modPos.Length >= GlycanBox.OGlycanBoxes[iDLow].OGlycanCount)
                     {
@@ -557,6 +542,34 @@ namespace PTMLocalization
             gsm.localizerOutput = gsm.WriteLine(null) + string.Format("\t{0}", ms2Scan.TheScan.OneBasedScanNumber);
 
             return gsm;
+        }
+
+        /**
+         * Check if a particular glycan has the required oxonium ion(s) given its composition. 
+         * Returns false if the glycan is NOT allowed based on oxonium, true if it is allowed. 
+         * 
+         * Requires a dictionary of FilterRule: bool indicating whether the required ion(s) have
+         * been found for a given rule for this spectrum. 
+         */
+        public bool CheckOxoniumFilter(int iDLow, Dictionary<FilterRule, bool> oxoniumBools)
+        {
+            foreach (FilterRule rule in GlobalVariables.OxoniumFilters)
+            {
+                bool matchedKind = true;
+                foreach (KeyValuePair<byte, int> requiredMonosaccharide in rule.MonosaccharidesRequired)
+                {
+                    if (GlycanBox.OGlycanBoxes[iDLow].Kind[requiredMonosaccharide.Key] < requiredMonosaccharide.Value)
+                    {
+                        matchedKind = false;
+                    }
+                }
+                // glycan has the monosaccharide(s) of interest to this filter: make sure oxonium(s) found
+                if (matchedKind && !oxoniumBools[rule])
+                {
+                    return false;
+                }
+            }
+            return true;
         }
 
         /**
