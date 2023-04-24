@@ -84,13 +84,13 @@ namespace PTMLocalization
             {
                 LocalizationGraph localizationGraph = new LocalizationGraph(modPos, modMotifs, globalBoxes[iDLow], globalBoxes[iDLow].ChildGlycanBoxes, iDLow);
 
-                LocalizationGraph.LocalizeMod(localizationGraph, theScan, ProductMassTolerance, mainProducts, GlycoPeptides.GetLocalFragmentGlycan, GlycoPeptides.GetUnlocalFragmentGlycan);
+                LocalizationGraph.LocalizeMod(localizationGraph, theScan, ProductMassTolerance, mainProducts, GlycoPeptides.GetLocalFragmentGlycan, GlycoPeptides.GetUnlocalFragmentGlycan, false);
 
                 if (theScan.ChildScans.Count > 0)
                 {
                     foreach (var childScan in theScan.ChildScans)
                     {
-                        LocalizationGraph.LocalizeMod(localizationGraph, childScan, ProductMassTolerance, childProducts, GlycoPeptides.GetLocalFragmentGlycan, GlycoPeptides.GetUnlocalFragmentGlycan);
+                        LocalizationGraph.LocalizeMod(localizationGraph, childScan, ProductMassTolerance, childProducts, GlycoPeptides.GetLocalFragmentGlycan, GlycoPeptides.GetUnlocalFragmentGlycan, false);
                     }
                 }
 

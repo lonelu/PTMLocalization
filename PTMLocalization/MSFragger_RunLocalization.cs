@@ -81,9 +81,10 @@ namespace PTMLocalization
             Console.WriteLine(String.Format("done in {0:0.0}s\n\tLoaded {1} glycans, {2} glycan boxes", timer.ElapsedMilliseconds * 0.001, GlycanBox.GlobalOGlycans.Length, GlycanBox.OGlycanBoxes.Length));
         }
 
-        private MsDataFile CheckAndLoadData(string rawfileBase, string rawfileName, Dictionary<string, bool> mzmlNotFoundWarnings, bool usingLcmsFilePath)
+        private MsDataFile CheckAndLoadData(string rawfileBase, string rawfileName, Dictionary<string, bool> mzmlNotFoundWarnings, bool usingLcmsFilePath, out bool isCalibratedFile)
         {
             // new rawfile: load scan data
+            isCalibratedFile = false;
             string spectraFile = null;
             bool fileFound = false;
             if (lcmsPaths.Count > 0)
@@ -115,6 +116,7 @@ namespace PTMLocalization
                 try
                 {
                     MsDataFile dataFile = Mzml.LoadAllStaticData(spectraFile, filter, searchForCorrectMs1PrecursorScan: false);
+                    isCalibratedFile = true;
                     return dataFile;
                 }
                 catch (Exception ex)
@@ -132,10 +134,13 @@ namespace PTMLocalization
                 filter = new FilteringParams();
                 try
                 {
-                    return Mgf.LoadAllStaticData(spectraFile, filter);
+                    MsDataFile dataFile = Mgf.LoadAllStaticData(spectraFile, filter);
+                    isCalibratedFile = true;
+                    return dataFile;
                 }
                 catch
                 {
+                    Console.Write("\nError loading calibrated MGF file, file not loaded");
                     return null;
                 }
             }
@@ -150,6 +155,7 @@ namespace PTMLocalization
                 }
                 catch
                 {
+                    Console.Write("\nError loading uncalibrated MGF file, file not loaded");
                     return null;
                 }
             }
@@ -313,7 +319,7 @@ namespace PTMLocalization
                 string rawfileName = rawfileEntry.Key + CAL_INPUT_EXTENSION;
                 timer.Start();
                 Console.Write(String.Format("\tLoading MS file {0}...", rawfileEntry.Key));
-                MsDataFile currentMsDataFile = CheckAndLoadData(rawfileEntry.Key, rawfileName, mzmlNotFoundWarnings, usingLcmsFilePath);
+                MsDataFile currentMsDataFile = CheckAndLoadData(rawfileEntry.Key, rawfileName, mzmlNotFoundWarnings, usingLcmsFilePath, out bool isCalibratedFile);
                 Console.Write(String.Format(" {0:0.0}s\n", timer.ElapsedMilliseconds * 0.001));
                 timer.Reset();
                 if (currentMsDataFile == null)
@@ -357,7 +363,7 @@ namespace PTMLocalization
                     options.MaxDegreeOfParallelism = 1;
                     Parallel.ForEach(scanDict, options, psmEntry =>
                     {
-                        string psmOutput = LocalizePSM(dataScansDict, scanPairs, psmEntry.Value, PSMtable, overwritePrevious, rawfileName);
+                        string psmOutput = LocalizePSM(dataScansDict, scanPairs, psmEntry.Value, PSMtable, overwritePrevious, rawfileName, isCalibratedFile);
                         lock (output) // to synchronize access to the dictionary
                         {
                             output.Add(psmEntry.Key, psmOutput);
@@ -384,7 +390,7 @@ namespace PTMLocalization
             return 0;
         }
 
-        private string LocalizePSM(Dictionary<int, MsDataScan> dataScansDict, Dictionary<int, int> scanPairs, string PSMline, MSFragger_PSMTable PSMtable, bool overwritePrevious, string currentRawfile)
+        private string LocalizePSM(Dictionary<int, MsDataScan> dataScansDict, Dictionary<int, int> scanPairs, string PSMline, MSFragger_PSMTable PSMtable, bool overwritePrevious, string currentRawfile, bool isCalibratedFile)
         {
             int scanNum = MSFragger_PSMTable.GetScanNum(PSMline);
 
@@ -431,10 +437,10 @@ namespace PTMLocalization
                 GlycoSpectralMatch emptyGSM = new GlycoSpectralMatch();
                 emptyGSM.localizerOutput = EMPTY_OUTPUT;
                 return PSMtable.editPSMLine(emptyGSM, lineSplits.ToList(), GlycanBox.GlobalOGlycans, overwritePrevious, false);
-            } 
+            }
 
-            // finalize spectrum for search
-            var scan = new Ms2ScanWithSpecificMass(ms2Scan, precursorMZ, precursorCharge, currentRawfile);
+            // finalize spectrum for search. Deconvolute spectrum only if the provided data has not already been calibrated and deconvoluted by MSFragger
+            var scan = GetScanHelper(ms2Scan, precursorMZ, precursorCharge, currentRawfile, isCalibratedFile);
 
             // initialize peptide with all non-glyco mods
             PeptideWithSetModifications peptideWithMods = getPeptideWithMSFraggerMods(assignedMods, peptide);
@@ -445,7 +451,7 @@ namespace PTMLocalization
             try
             {
                 MsDataScan hcdDataScan = dataScansDict[scanNum];
-                var hcdScan = new Ms2ScanWithSpecificMass(hcdDataScan, precursorMZ, precursorCharge, currentRawfile);
+                var hcdScan = GetScanHelper(hcdDataScan, precursorMZ, precursorCharge, currentRawfile, isCalibratedFile);
                 ratio = hcdScan.ComputeOxoRatio(OXO138, OXO144, ProductMassTolerance);
                 if (oxoMinRelativeIntensity > 0)
                 {
@@ -460,7 +466,7 @@ namespace PTMLocalization
             }
 
             // finally, run localizer
-            GlycoSpectralMatch gsm = LocalizeOGlyc(scan, peptideWithMods, deltaMass, ratio, oxoniumsToFilter);
+            GlycoSpectralMatch gsm = LocalizeOGlyc(scan, peptideWithMods, deltaMass, ratio, oxoniumsToFilter, isCalibratedFile);
             return PSMtable.editPSMLine(gsm, lineSplits.ToList(), GlycanBox.GlobalOGlycans, overwritePrevious, true);
 
         }
@@ -468,7 +474,7 @@ namespace PTMLocalization
         /**
          * Single scan O-glycan localization, given a peptide and glycan mass from MSFragger search
          */
-        public GlycoSpectralMatch LocalizeOGlyc(Ms2ScanWithSpecificMass ms2Scan, PeptideWithSetModifications peptide, double glycanDeltaMass, double oxoRatio, Dictionary<FilterRule, bool> oxoniumBools)
+        public GlycoSpectralMatch LocalizeOGlyc(Ms2ScanWithSpecificMass ms2Scan, PeptideWithSetModifications peptide, double glycanDeltaMass, double oxoRatio, Dictionary<FilterRule, bool> oxoniumBools, bool isCalibratedFile)
         {
             // generate peptide fragments
             List<Product> products = new List<Product>();
@@ -514,7 +520,7 @@ namespace PTMLocalization
                         LocalizationGraph localizationGraph = new LocalizationGraph(_modPos, modMotifs, GlycanBox.OGlycanBoxes[iDLow], GlycanBox.OGlycanBoxes[iDLow].ChildGlycanBoxes, iDLow);
                         LocalizationGraph.LocalizeMod(localizationGraph, ms2Scan, ProductMassTolerance,
                             products.Where(v => v.ProductType == ProductType.c || v.ProductType == ProductType.zDot).ToList(),
-                            GlycoPeptides.GetLocalFragmentGlycan, GlycoPeptides.GetUnlocalFragmentGlycan);
+                            GlycoPeptides.GetLocalFragmentGlycan, GlycoPeptides.GetUnlocalFragmentGlycan, isCalibratedFile);
                         graphs.Add(localizationGraph);
                     }
                     iDLow++;
@@ -549,6 +555,25 @@ namespace PTMLocalization
             gsm.localizerOutput = gsm.WriteLine(null) + string.Format("\t{0}", ms2Scan.TheScan.OneBasedScanNumber);
 
             return gsm;
+        }
+
+        /**
+         * Helper method to generate a Ms2ScanWithSpecificMass. Only deconvolutes the scan if it NOT isCalibratedFile to avoid
+         * re-deconvoluting input files that have been calibrated and deconvoluted by MSFragger. 
+         */
+        public static Ms2ScanWithSpecificMass GetScanHelper(MsDataScan ms2Scan, double precursorMZ, int precursorCharge, string currentRawfile, bool isCalibratedFile)
+        {
+            Ms2ScanWithSpecificMass scan;
+            if (isCalibratedFile)
+            {
+                scan = new Ms2ScanWithSpecificMass(ms2Scan, precursorMZ, precursorCharge, currentRawfile);
+            }
+            else
+            {
+                IsotopicEnvelope[] neutralExperimentalFragments = Ms2ScanWithSpecificMass.GetNeutralExperimentalFragments(ms2Scan, 4, 3);
+                scan = new Ms2ScanWithSpecificMass(ms2Scan, precursorMZ, precursorCharge, currentRawfile, 4, 3, neutralExperimentalFragments);
+            }
+            return scan;
         }
 
         /**

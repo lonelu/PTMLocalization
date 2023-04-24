@@ -88,7 +88,7 @@ namespace PTMLocalizationTest
             //    GlycoPeptides.GetLocalFragment, GlycoPeptides.GetUnlocalFragment);
             LocalizationGraph.LocalizeMod(localizationGraph0, scan, ProductMassTolerance,
     products.Where(v => v.ProductType == ProductType.c || v.ProductType == ProductType.zDot).ToList(),
-    GlycoPeptides.GetLocalFragmentGlycan, GlycoPeptides.GetUnlocalFragmentGlycan);
+    GlycoPeptides.GetLocalFragmentGlycan, GlycoPeptides.GetUnlocalFragmentGlycan, true);
             var allPaths0 = LocalizationGraph.GetAllHighestScorePaths(localizationGraph0.array, localizationGraph0.ChildModBoxes);
             var knowPath0 = new int[8] { 2, 4, 4, 4, 5, 5, 5, 5 };
             Assert.That(Enumerable.SequenceEqual(knowPath0, allPaths0[0]));
@@ -160,7 +160,7 @@ namespace PTMLocalizationTest
                 LocalizationGraph localizationGraph = new LocalizationGraph(_modPos, modMotifs, GlycanBox.OGlycanBoxes[iDLow], GlycanBox.OGlycanBoxes[iDLow].ChildGlycanBoxes, iDLow);
                 LocalizationGraph.LocalizeMod(localizationGraph, scan, ProductMassTolerance,
                     products.Where(v => v.ProductType == ProductType.c || v.ProductType == ProductType.zDot).ToList(),
-                    GlycoPeptides.GetLocalFragmentGlycan, GlycoPeptides.GetUnlocalFragmentGlycan);
+                    GlycoPeptides.GetLocalFragmentGlycan, GlycoPeptides.GetUnlocalFragmentGlycan, true);
                 graphs.Add(localizationGraph);
                 iDLow++;
             }
@@ -257,7 +257,7 @@ namespace PTMLocalizationTest
 
                     LocalizationGraph.LocalizeMod(localizationGraph0, scan, ProductMassTolerance,
             products.Where(v => v.ProductType == ProductType.c || v.ProductType == ProductType.zDot).ToList(),
-            GlycoPeptides.GetLocalFragmentGlycan, GlycoPeptides.GetUnlocalFragmentGlycan);
+            GlycoPeptides.GetLocalFragmentGlycan, GlycoPeptides.GetUnlocalFragmentGlycan, true);
                     var allPaths0 = LocalizationGraph.GetAllHighestScorePaths(localizationGraph0.array, localizationGraph0.ChildModBoxes);
                     var knowPath0 = new int[8] { 2, 4, 4, 4, 5, 5, 5, 5 };
                     //Assert.That(Enumerable.SequenceEqual(knowPath0, allPaths0[0]));
