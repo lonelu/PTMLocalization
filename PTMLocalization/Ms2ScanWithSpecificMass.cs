@@ -4,6 +4,7 @@ using Nett;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using MzLibUtil;
 
 namespace EngineLayer
 {
@@ -23,9 +24,10 @@ namespace EngineLayer
             NativeId = mzLibScan.NativeId;
 
             TheScan = mzLibScan;
-
+            BasePeakIntensity = GetBasePeakIntensity();
         }
 
+        // NOT USED for MSFragger version
         public Ms2ScanWithSpecificMass(MsDataScan mzLibScan, double precursorMonoisotopicPeakMz, int precursorCharge, string fullFilePath, double DeconvolutionMassTolerance, double DeconvolutionIntensityRatio, IsotopicEnvelope[] neutralExperimentalFragments = null)
         {
             PrecursorMonoisotopicPeakMz = precursorMonoisotopicPeakMz;
@@ -52,10 +54,10 @@ namespace EngineLayer
         /**
          * Compute oxonium intensity ratio (e.g. 138/144) for this scan. 
          */
-        public double ComputeOxoRatio(double numeratorMass, double denominatorMass, double tolerancePPM)
+        public double ComputeOxoRatio(double numeratorMass, double denominatorMass, Tolerance productTolerance)
         {
-            GetClosestExperimentalFragmentMzWithinTol(numeratorMass, tolerancePPM, out double? numerator);
-            GetClosestExperimentalFragmentMzWithinTol(denominatorMass, tolerancePPM, out double? denominator); 
+            GetClosestExperimentalFragmentMzWithinTol(numeratorMass, productTolerance, out double? numerator);
+            GetClosestExperimentalFragmentMzWithinTol(denominatorMass, productTolerance, out double? denominator); 
             double ratio = (double)(numerator / denominator);
             return ratio;
         }
@@ -64,21 +66,26 @@ namespace EngineLayer
          * Determine if a given set of oxonium ions are found in the scan, within the provided PPM tolerance. 
          * For each provided FilterRule, checks that at least one required ion is found (true if so). 
          * Returns a dictionary of rule: oxoniums found or not 
+         * minIntensity param is the base peak intensity pre-multiplied by minimum rel intensity user param
          */
-        public Dictionary<FilterRule, bool> FindOxoniums(List<FilterRule> filterRules, double tolerancePPM)
+        public Dictionary<FilterRule, bool> FindOxoniums(List<FilterRule> filterRules, Tolerance oxoTolerance, double minIntensity)
         {
             Dictionary<FilterRule, bool> outputBools = new();
             foreach (FilterRule rule in filterRules) 
             {
                 outputBools[rule] = false;
+                double totalIntensity = 0;
                 foreach (double mz in rule.Masses)
                 {
-                    GetClosestExperimentalFragmentMzWithinTol(mz, tolerancePPM, out double? intensity);
+                    GetClosestExperimentalFragmentMzWithinTol(mz, oxoTolerance, out double? intensity);
                     if (intensity > 0)
                     {
-                        outputBools[rule] = true;
-                        break;
+                        totalIntensity += (double) intensity;
                     }
+                }
+                if (totalIntensity >= minIntensity)
+                {
+                    outputBools[rule] = true;
                 }
             }
             return outputBools;
@@ -105,6 +112,8 @@ namespace EngineLayer
 
         public double TotalIonCurrent => TheScan.TotalIonCurrent;
 
+        public double BasePeakIntensity { get; set; }
+
         public static IsotopicEnvelope[] GetNeutralExperimentalFragments(MsDataScan scan, double DeconvolutionMassTolerance, double DeconvolutionIntensityRatio, bool AssumeOrphanPeaksAreZ1Fragments = true)
         {
             int minZ = 1;
@@ -116,14 +125,14 @@ namespace EngineLayer
             if (AssumeOrphanPeaksAreZ1Fragments)
             {
                 HashSet<double> alreadyClaimedMzs = new HashSet<double>(neutralExperimentalFragmentMasses
-                    .SelectMany(p => p.Peaks.Select(v => ClassExtensions.RoundedDouble(v.mz).Value)));
+                    .SelectMany(p => p.Peaks.Select(v => Chemistry.ClassExtensions.RoundedDouble(v.mz).Value)));
 
                 for (int i = 0; i < scan.MassSpectrum.XArray.Length; i++)
                 {
                     double mz = scan.MassSpectrum.XArray[i];
                     double intensity = scan.MassSpectrum.YArray[i];
 
-                    if (!alreadyClaimedMzs.Contains(ClassExtensions.RoundedDouble(mz).Value))
+                    if (!alreadyClaimedMzs.Contains(Chemistry.ClassExtensions.RoundedDouble(mz).Value))
                     {
                         neutralExperimentalFragmentMasses.Add(new IsotopicEnvelope(
                             new List<(double mz, double intensity)> { (mz, intensity) },
@@ -209,22 +218,13 @@ namespace EngineLayer
          * if no peaks found or if the closest peak is outside the tolerance. 
          * Returns intensity of 0 for peaks not found. 
          */
-        public double? GetClosestExperimentalFragmentMzWithinTol(double theoreticalMz, double tolerancePPM, out double? intensity)
+        public double? GetClosestExperimentalFragmentMzWithinTol(double theoreticalMz, Tolerance productTolerance, out double? intensity)
         {
-            double? mass = GetClosestExperimentalFragmentMz(theoreticalMz, out intensity);
-            double numeratorPPMrange = tolerancePPM * 0.000_001 * theoreticalMz;
-            if (mass.HasValue)
+            double mass = GetClosestExperimentalFragmentMz(theoreticalMz, out intensity);
+            if (productTolerance.Within(mass, theoreticalMz)) 
             {
-                if (Math.Abs((double)(mass - theoreticalMz)) <= numeratorPPMrange)
-                {
-                    return mass;
-                }
-                else
-                {
-                    intensity = 0.0;
-                    return null;
-                }
-            } 
+                return mass;
+            }
             else
             {
                 intensity = 0.0;
@@ -232,12 +232,12 @@ namespace EngineLayer
             }
         }
 
-        public double? GetClosestExperimentalFragmentMz(double theoreticalMz, out double? intensity)
+        public double GetClosestExperimentalFragmentMz(double theoreticalMz, out double? intensity)
         {
             if (TheScan.MassSpectrum.XArray.Length == 0)
             {
                 intensity = null;
-                return null;
+                return 0;
             }
             intensity = TheScan.MassSpectrum.YArray[GetClosestFragmentMzIndex(theoreticalMz).Value];
             return TheScan.MassSpectrum.XArray[GetClosestFragmentMzIndex(theoreticalMz).Value];
@@ -271,6 +271,14 @@ namespace EngineLayer
             }
             return index - 1;
 
+        }
+        private double GetBasePeakIntensity()
+        {
+            if (TheScan.MassSpectrum.YArray.Length == 0)
+            {
+                return 0;
+            }
+            return TheScan.MassSpectrum.YArray.Max();
         }
     }
 }

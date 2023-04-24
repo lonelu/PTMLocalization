@@ -29,6 +29,7 @@ namespace PTMLocalization
         private int maxOGlycansPerPeptide;
         private int[] isotopes;
         private bool filterOxonium;
+        private double oxoMinRelativeIntensity;
 
         private Dictionary<string, string> lcmsPaths;
 
@@ -47,7 +48,7 @@ namespace PTMLocalization
         private static readonly double OXO144 = 144.06552;
         private static readonly Regex NglycMotifRegex = new Regex("N[^P][ST]", RegexOptions.Compiled);
 
-        public MSFragger_RunLocalization(string _psmFile, string _scanpairFile, string _rawfilesDirectory, string lcmsFileList, string _o_glycan_database_path, int _maxOGlycansPerPeptide, Tolerance _PrecursorMassTolerance, Tolerance _ProductMassTolerance, int[] _isotopes, bool _filterOxonium)
+        public MSFragger_RunLocalization(string _psmFile, string _scanpairFile, string _rawfilesDirectory, string lcmsFileList, string _o_glycan_database_path, int _maxOGlycansPerPeptide, Tolerance _PrecursorMassTolerance, Tolerance _ProductMassTolerance, int[] _isotopes, bool _filterOxonium, double _oxoMinRelativeIntensity)
         {
             psmFile = _psmFile;
             scanpairFile = _scanpairFile;
@@ -59,6 +60,7 @@ namespace PTMLocalization
             maxOGlycansPerPeptide = _maxOGlycansPerPeptide;
             isotopes = _isotopes;
             filterOxonium = _filterOxonium;
+            oxoMinRelativeIntensity = _oxoMinRelativeIntensity;
 
             Setup();
         }
@@ -437,16 +439,19 @@ namespace PTMLocalization
             // initialize peptide with all non-glyco mods
             PeptideWithSetModifications peptideWithMods = getPeptideWithMSFraggerMods(assignedMods, peptide);
 
-            // get oxo 138/144 ratio from the HCD scan
+            // get oxonium ions and ratio from the HCD scan
             Dictionary<FilterRule, bool> oxoniumsToFilter = new();
             double ratio;
             try
             {
                 MsDataScan hcdDataScan = dataScansDict[scanNum];
                 var hcdScan = new Ms2ScanWithSpecificMass(hcdDataScan, precursorMZ, precursorCharge, currentRawfile);
-                ratio = hcdScan.ComputeOxoRatio(OXO138, OXO144, ProductMassTolerance.Value);
-                // todo: add parameter
-                oxoniumsToFilter = hcdScan.FindOxoniums(GlobalVariables.OxoniumFilters, ProductMassTolerance.Value);
+                ratio = hcdScan.ComputeOxoRatio(OXO138, OXO144, ProductMassTolerance);
+                if (oxoMinRelativeIntensity > 0)
+                {
+                    double minOxoInt = oxoMinRelativeIntensity * hcdScan.BasePeakIntensity;
+                    oxoniumsToFilter = hcdScan.FindOxoniums(GlobalVariables.OxoniumFilters, ProductMassTolerance, minOxoInt);
+                }
             }
             catch (KeyNotFoundException)
             {
@@ -492,12 +497,15 @@ namespace PTMLocalization
                 while (iDLow < GlycanBox.OGlycanBoxes.Length && GlycanBox.OGlycanBoxes[iDLow].Mass <= possibleGlycanMassHigh)
                 {
                     // filter based on oxonium ions if requested
-                    bool oxoFilter = CheckOxoniumFilter(iDLow, oxoniumBools);
-                    if (!oxoFilter)
+                    if (oxoniumBools.Count > 0)
                     {
-                        iDLow++;
-                        oxoFilteredOut = true;
-                        continue;
+                        bool oxoFilter = CheckOxoniumFilter(iDLow, oxoniumBools);
+                        if (!oxoFilter)
+                        {
+                            iDLow++;
+                            oxoFilteredOut = true;
+                            continue;
+                        }
                     }
 
                     // only consider possibilities with enough sites on the peptide to accomodate all glycans

@@ -65,10 +65,16 @@ namespace CMD
             // todo: add option for specifying monosaccharides.tsv (to replace the initial "null" here)
             GlobalVariables.SetUpGlobalVariables(null, settings.oxoFilter);
 
+            if (settings.oxoMinInt < 0 || settings.oxoMinInt > 1)
+            {
+                settings.oxoMinInt = 0;
+                Console.WriteLine(String.Format("Invalid oxonium intensity ratio. Please set oxonium ratio between 0 and 1. Oxonium filtering DISABLED"));
+            }
+
             try
             {
                 var task = new Task();
-                errorCode = task.run_msfragger(settings.productPpmTol, settings.precursorPpmTol, settings.psmFile, settings.scanpairFile, settings.rawfileDirectory, settings.lcmsFilesList, settings.glycoDatabase, settings.maxNumGlycans, settings.minIsotopeError, settings.maxIsotopeError, doOxoFilter);
+                errorCode = task.run_msfragger(settings.productPpmTol, settings.precursorPpmTol, settings.psmFile, settings.scanpairFile, settings.rawfileDirectory, settings.lcmsFilesList, settings.glycoDatabase, settings.maxNumGlycans, settings.minIsotopeError, settings.maxIsotopeError, doOxoFilter, settings.oxoMinInt);
                 if (errorCode == 0)
                 {
                     Console.WriteLine("Run finished.");

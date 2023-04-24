@@ -50,6 +50,9 @@ namespace CMD
         [Option('f', HelpText = "[Optional] If present, filter glycans based on oxonium ions observed. Uses default list if path to a tsv file is not provided")]
         public string oxoFilter { get; set; }
 
+        [Option('m', Default = 0, HelpText = "[Optional] Minimum relative intensity for oxonium ion filtering. Summed intensity for all oxonium ions in a class must exceed this ratio relative to the spectrum base peak to pass filtering. Values between 0 and 1.")]
+        public double oxoMinInt { get; set; }
+
         public override string ToString()
         {
             string x = "";
@@ -62,6 +65,7 @@ namespace CMD
             x += " -i " + minIsotopeError.ToString(); 
             x += " -j " + maxIsotopeError.ToString();
             x += " -f " + oxoFilter;
+            x += " -m " + oxoMinInt.ToString();
             x += " -d " + rawfileDirectory;
             x += " -r " + lcmsFilesList;
             x += " -s " + psmFile;
