@@ -40,7 +40,7 @@ namespace CMD
 
             if (settings.Verbosity == CmdSettings.VerbosityType.minimal || settings.Verbosity == CmdSettings.VerbosityType.normal)
             {
-                Console.WriteLine("PTMLocalization version: 1.0.");
+                Console.WriteLine("PTMLocalization version: 1.0.1");
             }
 
             // check settings and trim input paths
