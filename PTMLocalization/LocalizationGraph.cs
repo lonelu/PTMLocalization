@@ -64,12 +64,12 @@ namespace EngineLayer.GlycoSearch
 
             foreach (var f in fragments)
             {
-                var closestExperimentalMass = theScan.GetClosestExperimentalIsotopicEnvelope(f);
+                var closestExperimentalMass = theScan.GetClosestExperimentalFragmentMz(f, out var intensity);
 
                 // is the mass error acceptable?
-                if (productTolerance.Within(closestExperimentalMass.MonoisotopicMass, f) && closestExperimentalMass.Charge <= theScan.PrecursorCharge)
+                if (productTolerance.Within(closestExperimentalMass, f))
                 {
-                    score += 1 + closestExperimentalMass.Peaks.Sum(p => p.intensity) / theScan.TotalIonCurrent;
+                    score += 1 + (double) intensity / theScan.TotalIonCurrent;
                 }
             }
             return score;

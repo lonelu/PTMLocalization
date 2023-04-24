@@ -432,8 +432,7 @@ namespace PTMLocalization
             } 
 
             // finalize spectrum for search
-            IsotopicEnvelope[] neutralExperimentalFragments = Ms2ScanWithSpecificMass.GetNeutralExperimentalFragments(ms2Scan, 4, 3);
-            var scan = new Ms2ScanWithSpecificMass(ms2Scan, precursorMZ, precursorCharge, currentRawfile, 4, 3, neutralExperimentalFragments);
+            var scan = new Ms2ScanWithSpecificMass(ms2Scan, precursorMZ, precursorCharge, currentRawfile);
 
             // initialize peptide with all non-glyco mods
             PeptideWithSetModifications peptideWithMods = getPeptideWithMSFraggerMods(assignedMods, peptide);
@@ -444,7 +443,7 @@ namespace PTMLocalization
             try
             {
                 MsDataScan hcdDataScan = dataScansDict[scanNum];
-                var hcdScan = new Ms2ScanWithSpecificMass(hcdDataScan, precursorMZ, precursorCharge, currentRawfile, 4, 3, neutralExperimentalFragments);
+                var hcdScan = new Ms2ScanWithSpecificMass(hcdDataScan, precursorMZ, precursorCharge, currentRawfile);
                 ratio = hcdScan.ComputeOxoRatio(OXO138, OXO144, ProductMassTolerance.Value);
                 // todo: add parameter
                 oxoniumsToFilter = hcdScan.FindOxoniums(GlobalVariables.OxoniumFilters, ProductMassTolerance.Value);

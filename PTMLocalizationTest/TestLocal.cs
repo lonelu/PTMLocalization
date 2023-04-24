@@ -69,8 +69,8 @@ namespace PTMLocalizationTest
             //double precursorMZ = ms2Scan.SelectedIonMZ.Value;
             int precursorCharge = ms2Scan.SelectedIonChargeStateGuess.Value;
 
-            IsotopicEnvelope[] neutralExperimentalFragments = Ms2ScanWithSpecificMass.GetNeutralExperimentalFragments(ms2Scan, 4, 3);
-            var scan = new Ms2ScanWithSpecificMass(ms2Scan, precursorMZ, precursorCharge, spectraFile, 4, 3, neutralExperimentalFragments);
+            //IsotopicEnvelope[] neutralExperimentalFragments = Ms2ScanWithSpecificMass.GetNeutralExperimentalFragments(ms2Scan, 4, 3);
+            var scan = new Ms2ScanWithSpecificMass(ms2Scan, precursorMZ, precursorCharge, spectraFile);
 
             ////Known peptideWithMod match.
             //var peptideWithMod = GlycoPeptides.GlyGetTheoreticalPeptide(new int[3] { 10, 2, 3 }, peptide, glycanBox, GlycanBox.GlobalOGlycanMods);
@@ -138,8 +138,8 @@ namespace PTMLocalizationTest
             //double precursorMZ = ms2Scan.SelectedIonMZ.Value;
             int precursorCharge = ms2Scan.SelectedIonChargeStateGuess.Value;
 
-            IsotopicEnvelope[] neutralExperimentalFragments = Ms2ScanWithSpecificMass.GetNeutralExperimentalFragments(ms2Scan, 4, 3);
-            var scan = new Ms2ScanWithSpecificMass(ms2Scan, precursorMZ, precursorCharge, spectraFile, 4, 3, neutralExperimentalFragments);
+            //IsotopicEnvelope[] neutralExperimentalFragments = Ms2ScanWithSpecificMass.GetNeutralExperimentalFragments(ms2Scan, 4, 3);
+            var scan = new Ms2ScanWithSpecificMass(ms2Scan, precursorMZ, precursorCharge, spectraFile);
 
 
             List<int> n_modPos = new List<int>();
@@ -217,8 +217,8 @@ namespace PTMLocalizationTest
             //double precursorMZ = ms2Scan.SelectedIonMZ.Value;
             int precursorCharge = ms2Scan.SelectedIonChargeStateGuess.Value;
 
-            IsotopicEnvelope[] neutralExperimentalFragments = Ms2ScanWithSpecificMass.GetNeutralExperimentalFragments(ms2Scan, 4, 3);
-            var scan = new Ms2ScanWithSpecificMass(ms2Scan, precursorMZ, precursorCharge, spectraFile, 4, 3, neutralExperimentalFragments);
+            //IsotopicEnvelope[] neutralExperimentalFragments = Ms2ScanWithSpecificMass.GetNeutralExperimentalFragments(ms2Scan, 4, 3);
+            var scan = new Ms2ScanWithSpecificMass(ms2Scan, precursorMZ, precursorCharge, spectraFile);
 
 
             //Get unmodified peptide, products

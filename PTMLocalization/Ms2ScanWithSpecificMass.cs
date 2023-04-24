@@ -9,6 +9,23 @@ namespace EngineLayer
 {
     public class Ms2ScanWithSpecificMass
     {
+
+        /**
+         * Constructor without deconvolution. Used for MSFragger runs since deisotoping/deconvolution is handled by MSFragger.
+         */ 
+        public Ms2ScanWithSpecificMass(MsDataScan mzLibScan, double precursorMonoisotopicPeakMz, int precursorCharge, string fullFilePath)
+        {
+            PrecursorMonoisotopicPeakMz = precursorMonoisotopicPeakMz;
+            PrecursorCharge = precursorCharge;
+            PrecursorMass = PrecursorMonoisotopicPeakMz.ToMass(precursorCharge);
+            FullFilePath = fullFilePath;
+            ChildScans = new List<Ms2ScanWithSpecificMass>();
+            NativeId = mzLibScan.NativeId;
+
+            TheScan = mzLibScan;
+
+        }
+
         public Ms2ScanWithSpecificMass(MsDataScan mzLibScan, double precursorMonoisotopicPeakMz, int precursorCharge, string fullFilePath, double DeconvolutionMassTolerance, double DeconvolutionIntensityRatio, IsotopicEnvelope[] neutralExperimentalFragments = null)
         {
             PrecursorMonoisotopicPeakMz = precursorMonoisotopicPeakMz;
