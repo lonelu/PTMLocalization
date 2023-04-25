@@ -118,6 +118,7 @@ namespace PTMLocalization
             {
                 try
                 {
+                    Console.Write(String.Format("\tLoading {0}...", Path.GetFileName(spectraFile)));
                     MsDataFile dataFile = Mzml.LoadAllStaticData(spectraFile, filter, searchForCorrectMs1PrecursorScan: false);
                     return dataFile;
                 }
@@ -136,6 +137,7 @@ namespace PTMLocalization
                 filter = new FilteringParams();
                 try
                 {
+                    Console.Write(String.Format("\tLoading {0}...", Path.GetFileName(spectraFile)));
                     return Mgf.LoadAllStaticData(spectraFile, filter);
                 }
                 catch
@@ -151,6 +153,7 @@ namespace PTMLocalization
                 filter = new FilteringParams();
                 try
                 {
+                    Console.Write(String.Format("\tLoading {0}...", Path.GetFileName(spectraFile)));
                     return Mgf.LoadAllStaticData(spectraFile, filter);
                 }
                 catch
@@ -167,6 +170,7 @@ namespace PTMLocalization
             {
                 try
                 {
+                    Console.Write(String.Format("\tLoading {0}...", Path.GetFileName(spectraFile)));
                     return Mzml.LoadAllStaticData(spectraFile, filter, searchForCorrectMs1PrecursorScan: false);
                 }
                 catch (Exception ex)
@@ -318,7 +322,6 @@ namespace PTMLocalization
                 // load raw file and pairs table
                 string rawfileName = rawfileEntry.Key + CAL_INPUT_EXTENSION;
                 timer.Start();
-                Console.Write(String.Format("\tLoading MS file {0}...", rawfileEntry.Key));
                 MsDataFile currentMsDataFile = CheckAndLoadData(rawfileEntry.Key, rawfileName, mzmlNotFoundWarnings, usingLcmsFilePath);
                 Console.Write(String.Format(" {0:0.0}s\n", timer.ElapsedMilliseconds * 0.001));
                 timer.Reset();
