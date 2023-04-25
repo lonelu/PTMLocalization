@@ -74,7 +74,10 @@ namespace CMD
             try
             {
                 var task = new Task();
-                errorCode = task.run_msfragger(settings.productPpmTol, settings.precursorPpmTol, settings.psmFile, settings.scanpairFile, settings.rawfileDirectory, settings.lcmsFilesList, settings.glycoDatabase, settings.maxNumGlycans, settings.minIsotopeError, settings.maxIsotopeError, doOxoFilter, settings.oxoMinInt);
+                errorCode = task.run_msfragger(settings.productPpmTol, settings.precursorPpmTol, settings.psmFile, 
+                    settings.scanpairFile, settings.rawfileDirectory, settings.lcmsFilesList, settings.glycoDatabase, 
+                    settings.maxNumGlycans, settings.minIsotopeError, settings.maxIsotopeError, doOxoFilter, settings.oxoMinInt,
+                    settings.numThreads);
                 if (errorCode == 0)
                 {
                     Console.WriteLine("Run finished.");

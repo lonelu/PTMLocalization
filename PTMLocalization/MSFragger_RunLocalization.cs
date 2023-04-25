@@ -30,6 +30,7 @@ namespace PTMLocalization
         private int[] isotopes;
         private bool filterOxonium;
         private double oxoMinRelativeIntensity;
+        private int numThreads;
 
         private Dictionary<string, string> lcmsPaths;
 
@@ -48,7 +49,9 @@ namespace PTMLocalization
         private static readonly double OXO144 = 144.06552;
         private static readonly Regex NglycMotifRegex = new Regex("N[^P][ST]", RegexOptions.Compiled);
 
-        public MSFragger_RunLocalization(string _psmFile, string _scanpairFile, string _rawfilesDirectory, string lcmsFileList, string _o_glycan_database_path, int _maxOGlycansPerPeptide, Tolerance _PrecursorMassTolerance, Tolerance _ProductMassTolerance, int[] _isotopes, bool _filterOxonium, double _oxoMinRelativeIntensity)
+        public MSFragger_RunLocalization(string _psmFile, string _scanpairFile, string _rawfilesDirectory, string lcmsFileList, 
+            string _o_glycan_database_path, int _maxOGlycansPerPeptide, Tolerance _PrecursorMassTolerance, Tolerance _ProductMassTolerance, 
+            int[] _isotopes, bool _filterOxonium, double _oxoMinRelativeIntensity, int _numThreads)
         {
             psmFile = _psmFile;
             scanpairFile = _scanpairFile;
@@ -61,6 +64,7 @@ namespace PTMLocalization
             isotopes = _isotopes;
             filterOxonium = _filterOxonium;
             oxoMinRelativeIntensity = _oxoMinRelativeIntensity;
+            numThreads = _numThreads;
 
             Setup();
         }
@@ -360,7 +364,10 @@ namespace PTMLocalization
 
                     // localize all PSMs in parallel
                     ParallelOptions options = new();
-                    options.MaxDegreeOfParallelism = 1;
+                    if (numThreads > 0)
+                    {
+                        options.MaxDegreeOfParallelism = numThreads;
+                    }
                     Parallel.ForEach(scanDict, options, psmEntry =>
                     {
                         string psmOutput = LocalizePSM(dataScansDict, scanPairs, psmEntry.Value, PSMtable, overwritePrevious, rawfileName, isCalibratedFile);

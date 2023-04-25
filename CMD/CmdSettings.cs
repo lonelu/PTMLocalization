@@ -53,9 +53,13 @@ namespace CMD
         [Option('m', Default = 0, HelpText = "[Optional] Minimum relative intensity for oxonium ion filtering. Summed intensity for all oxonium ions in a class must exceed this ratio relative to the spectrum base peak to pass filtering. Values between 0 and 1.")]
         public double oxoMinInt { get; set; }
 
+        [Option('t', Default = 0, HelpText = "[Optional] Number of threads")]
+        public int numThreads { get; set; }
+
         public override string ToString()
         {
             string x = "";
+            x += " -t " + numThreads.ToString();
             x += " -b " + productPpmTol.ToString();
 
             x += " -c " + precursorPpmTol.ToString();
