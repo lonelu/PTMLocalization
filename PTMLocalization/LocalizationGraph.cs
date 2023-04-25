@@ -58,40 +58,7 @@ namespace EngineLayer.GlycoSearch
 
         //Based on our implementation of Graph localization. We need to calculate cost between two nearby nodes (glycosites) 
         // refer to the method MetaMorpheusEngine.CalculatePeptideScore().
-        public static double CalculateCost(Ms2ScanWithSpecificMass theScan, Tolerance productTolerance, List<double> fragments, bool isCalibratedFile)
-        {
-            if (isCalibratedFile)
-            {
-                return CalculateCostNoDeconv(theScan, productTolerance, fragments);
-            } 
-            else
-            {
-                return CalculateCostDeconv(theScan, productTolerance, fragments);
-            }
-        }
-        /**
-         * MSFragger method, used for spectra that have previously been deconvoluted by MSFragger. 
-         */
-        public static double CalculateCostNoDeconv(Ms2ScanWithSpecificMass theScan, Tolerance productTolerance, List<double> fragments)
-        {
-            double score = 0;
-
-            foreach (var f in fragments)
-            {
-                var closestExperimentalMass = theScan.GetClosestExperimentalFragmentMz(f, out var intensity);
-
-                // is the mass error acceptable?
-                if (productTolerance.Within(closestExperimentalMass, f))
-                {
-                    score += 1 + (double)intensity / theScan.TotalIonCurrent;
-                }
-            }
-            return score;
-        }
-        /**
-         * Original method, used for spectra that have NOT previously been deconvoluted by MSFragger. 
-         */
-        public static double CalculateCostDeconv(Ms2ScanWithSpecificMass theScan, Tolerance productTolerance, List<double> fragments)
+        public static double CalculateCost(Ms2ScanWithSpecificMass theScan, Tolerance productTolerance, List<double> fragments)
         {
             double score = 0;
 
@@ -381,7 +348,7 @@ namespace EngineLayer.GlycoSearch
         //The Graph is designed to be able to run multiple cycles for different scans.
         public static void LocalizeMod(LocalizationGraph localizationGraph, Ms2ScanWithSpecificMass theScan, Tolerance productTolerance, List<Product> products, 
             Func<List<Product>,int, int, LocalizationGraph, List<double>> getLocalFragment, 
-            Func<List<Product>, int[], ModBox, List<double>> getUnLocalFragment, bool isCalibratedFile)
+            Func<List<Product>, int[], ModBox, List<double>> getUnLocalFragment)
         {
             var boxSatisfyBox = BoxSatisfyBox(localizationGraph.ChildModBoxes);
 
@@ -395,7 +362,7 @@ namespace EngineLayer.GlycoSearch
                         if (i != localizationGraph.ModPos.Length - 1)
                         {
                             var fragments = getLocalFragment(products, i, j, localizationGraph);
-                            cost = CalculateCost(theScan, productTolerance, fragments, isCalibratedFile);
+                            cost = CalculateCost(theScan, productTolerance, fragments);
                         }
 
                         localizationGraph.array[i][j].CurrentCost += cost;
@@ -441,7 +408,7 @@ namespace EngineLayer.GlycoSearch
             }
 
             var unlocalFragments = getUnLocalFragment(products, localizationGraph.ModPos, localizationGraph.ModBox);
-            var noLocalScore = CalculateCost(theScan, productTolerance, unlocalFragments, isCalibratedFile);
+            var noLocalScore = CalculateCost(theScan, productTolerance, unlocalFragments);
             localizationGraph.NoLocalCost += noLocalScore;
             localizationGraph.TotalScore += localizationGraph.array[localizationGraph.ModPos.Length - 1][localizationGraph.ChildModBoxes.Length - 1].CummulativeCost + noLocalScore;
 

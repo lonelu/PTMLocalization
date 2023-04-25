@@ -69,8 +69,8 @@ namespace PTMLocalizationTest
             //double precursorMZ = ms2Scan.SelectedIonMZ.Value;
             int precursorCharge = ms2Scan.SelectedIonChargeStateGuess.Value;
 
-            //IsotopicEnvelope[] neutralExperimentalFragments = Ms2ScanWithSpecificMass.GetNeutralExperimentalFragments(ms2Scan, 4, 3);
-            var scan = new Ms2ScanWithSpecificMass(ms2Scan, precursorMZ, precursorCharge, spectraFile);
+            IsotopicEnvelope[] neutralExperimentalFragments = Ms2ScanWithSpecificMass.GetNeutralExperimentalFragments(ms2Scan, 4, 3);
+            var scan = new Ms2ScanWithSpecificMass(ms2Scan, precursorMZ, precursorCharge, spectraFile, 4, 3, neutralExperimentalFragments);
 
             ////Known peptideWithMod match.
             //var peptideWithMod = GlycoPeptides.GlyGetTheoreticalPeptide(new int[3] { 10, 2, 3 }, peptide, glycanBox, GlycanBox.GlobalOGlycanMods);
@@ -88,7 +88,7 @@ namespace PTMLocalizationTest
             //    GlycoPeptides.GetLocalFragment, GlycoPeptides.GetUnlocalFragment);
             LocalizationGraph.LocalizeMod(localizationGraph0, scan, ProductMassTolerance,
     products.Where(v => v.ProductType == ProductType.c || v.ProductType == ProductType.zDot).ToList(),
-    GlycoPeptides.GetLocalFragmentGlycan, GlycoPeptides.GetUnlocalFragmentGlycan, true);
+    GlycoPeptides.GetLocalFragmentGlycan, GlycoPeptides.GetUnlocalFragmentGlycan);
             var allPaths0 = LocalizationGraph.GetAllHighestScorePaths(localizationGraph0.array, localizationGraph0.ChildModBoxes);
             var knowPath0 = new int[8] { 2, 4, 4, 4, 5, 5, 5, 5 };
             Assert.That(Enumerable.SequenceEqual(knowPath0, allPaths0[0]));
@@ -138,8 +138,8 @@ namespace PTMLocalizationTest
             //double precursorMZ = ms2Scan.SelectedIonMZ.Value;
             int precursorCharge = ms2Scan.SelectedIonChargeStateGuess.Value;
 
-            //IsotopicEnvelope[] neutralExperimentalFragments = Ms2ScanWithSpecificMass.GetNeutralExperimentalFragments(ms2Scan, 4, 3);
-            var scan = new Ms2ScanWithSpecificMass(ms2Scan, precursorMZ, precursorCharge, spectraFile);
+            IsotopicEnvelope[] neutralExperimentalFragments = Ms2ScanWithSpecificMass.GetNeutralExperimentalFragments(ms2Scan, 4, 3);
+            var scan = new Ms2ScanWithSpecificMass(ms2Scan, precursorMZ, precursorCharge, spectraFile, 4, 3, neutralExperimentalFragments);
 
 
             List<int> n_modPos = new List<int>();
@@ -160,7 +160,7 @@ namespace PTMLocalizationTest
                 LocalizationGraph localizationGraph = new LocalizationGraph(_modPos, modMotifs, GlycanBox.OGlycanBoxes[iDLow], GlycanBox.OGlycanBoxes[iDLow].ChildGlycanBoxes, iDLow);
                 LocalizationGraph.LocalizeMod(localizationGraph, scan, ProductMassTolerance,
                     products.Where(v => v.ProductType == ProductType.c || v.ProductType == ProductType.zDot).ToList(),
-                    GlycoPeptides.GetLocalFragmentGlycan, GlycoPeptides.GetUnlocalFragmentGlycan, true);
+                    GlycoPeptides.GetLocalFragmentGlycan, GlycoPeptides.GetUnlocalFragmentGlycan);
                 graphs.Add(localizationGraph);
                 iDLow++;
             }
@@ -218,8 +218,8 @@ namespace PTMLocalizationTest
             //double precursorMZ = ms2Scan.SelectedIonMZ.Value;
             int precursorCharge = ms2Scan.SelectedIonChargeStateGuess.Value;
 
-            //IsotopicEnvelope[] neutralExperimentalFragments = Ms2ScanWithSpecificMass.GetNeutralExperimentalFragments(ms2Scan, 4, 3);
-            var scan = new Ms2ScanWithSpecificMass(ms2Scan, precursorMZ, precursorCharge, spectraFile);
+            IsotopicEnvelope[] neutralExperimentalFragments = Ms2ScanWithSpecificMass.GetNeutralExperimentalFragments(ms2Scan, 4, 3);
+            var scan = new Ms2ScanWithSpecificMass(ms2Scan, precursorMZ, precursorCharge, spectraFile, 4, 3, neutralExperimentalFragments);
 
 
             //Get unmodified peptide, products
@@ -257,7 +257,7 @@ namespace PTMLocalizationTest
 
                     LocalizationGraph.LocalizeMod(localizationGraph0, scan, ProductMassTolerance,
             products.Where(v => v.ProductType == ProductType.c || v.ProductType == ProductType.zDot).ToList(),
-            GlycoPeptides.GetLocalFragmentGlycan, GlycoPeptides.GetUnlocalFragmentGlycan, true);
+            GlycoPeptides.GetLocalFragmentGlycan, GlycoPeptides.GetUnlocalFragmentGlycan);
                     var allPaths0 = LocalizationGraph.GetAllHighestScorePaths(localizationGraph0.array, localizationGraph0.ChildModBoxes);
                     var knowPath0 = new int[8] { 2, 4, 4, 4, 5, 5, 5, 5 };
                     //Assert.That(Enumerable.SequenceEqual(knowPath0, allPaths0[0]));
