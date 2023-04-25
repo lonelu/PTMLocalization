@@ -14,6 +14,7 @@ namespace CMD
     public static class Program
     {
         private static CmdSettings CommandLineSettings;
+        private static readonly string version = "1.0.3";
 
         public static int Main(string[] args)
         {
@@ -40,7 +41,7 @@ namespace CMD
 
             if (settings.Verbosity == CmdSettings.VerbosityType.minimal || settings.Verbosity == CmdSettings.VerbosityType.normal)
             {
-                Console.WriteLine("PTMLocalization version: 1.0.2");
+                Console.WriteLine("PTMLocalization version: " + version);
             }
 
             // check settings and trim input paths
