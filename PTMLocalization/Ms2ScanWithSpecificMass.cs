@@ -31,6 +31,7 @@ namespace EngineLayer
             {
                 DeconvolutedMonoisotopicMasses = new double[0];
             }
+            BasePeakIntensity = GetBasePeakIntensity();
         }
 
         /**
