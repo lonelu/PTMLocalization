@@ -86,7 +86,7 @@ namespace PTMLocalization
             GlycanBox.OGlycanBoxes = GlycanBox.BuildGlycanBoxes(maxOGlycansPerPeptide, GlycanBox.GlobalOGlycans, GlycanBox.GlobalOGlycanMods, numThreads, maxGlycanMass).OrderBy(p => p.Mass).ToArray();
 
             timer.Stop();
-            Console.WriteLine(String.Format("done in {0:0.0}s\n\tLoaded {1} glycans, {2} glycan boxes", timer.ElapsedMilliseconds * 0.001, GlycanBox.GlobalOGlycans.Length, GlycanBox.OGlycanBoxes.Length));
+            Console.WriteLine(String.Format("done in {0:0.0}s\n\tLoaded {1} glycans, {2} glycan combinations", timer.ElapsedMilliseconds * 0.001, GlycanBox.GlobalOGlycans.Length, GlycanBox.OGlycanBoxes.Length));
         }
 
         private MsDataFile CheckAndLoadData(string rawfileBase, string rawfileName, Dictionary<string, bool> mzmlNotFoundWarnings, bool usingLcmsFilePath)
