@@ -1,5 +1,8 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Proteomics;
 
 
@@ -94,18 +97,21 @@ namespace EngineLayer
         //After O-glycans are read in from database, we build combinations of glycans into GlycanBox. The maxNum is maximum glycans allowed on one peptides.
         public static IEnumerable<GlycanBox> BuildGlycanBoxes(int maxNum, Glycan[] glycans, Modification[] modifications)
         {
-
+            List<GlycanBox> results = new List<GlycanBox>();
             for (int i = 1; i <= maxNum; i++)
             {
-                foreach (var idCombine in Glycan.GetKCombsWithRept(Enumerable.Range(0, glycans.Length), i))
+                Parallel.ForEach(Glycan.GetKCombsWithRept(Enumerable.Range(0, glycans.Length), i), idCombine =>
                 {
                     var motifs = GetGlycanBoxMotifs(idCombine.ToArray(), modifications);
                     GlycanBox glycanBox = new GlycanBox(idCombine.ToArray(), motifs, glycans, modifications);
                     glycanBox.ChildGlycanBoxes = BuildChildGlycanBoxes(glycanBox.ModIds, glycans, modifications).ToArray();
-
-                    yield return glycanBox;
-                }
+                    lock (results)
+                    {
+                        results.Add(glycanBox);
+                    }
+                });
             }
+            return results;
         }
 
         //After O-glycans are read in from database, we transfer the glycans into 'Modification' class type for MetaMorpheus to manipulate sequences.
