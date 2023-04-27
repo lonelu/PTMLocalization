@@ -79,7 +79,7 @@ namespace PTMLocalization
             timer.Start();
             GlycanBox.GlobalOGlycans = GlycanDatabase.LoadGlycan(o_glycan_database, true, true).ToArray();
             GlycanBox.GlobalOGlycanMods = GlycanBox.BuildGlobalOGlycanMods(GlycanBox.GlobalOGlycans).ToArray();
-            GlycanBox.OGlycanBoxes = GlycanBox.BuildGlycanBoxes(maxOGlycansPerPeptide, GlycanBox.GlobalOGlycans, GlycanBox.GlobalOGlycanMods).OrderBy(p => p.Mass).ToArray();
+            GlycanBox.OGlycanBoxes = GlycanBox.BuildGlycanBoxes(maxOGlycansPerPeptide, GlycanBox.GlobalOGlycans, GlycanBox.GlobalOGlycanMods, numThreads, maxGlycanMass).OrderBy(p => p.Mass).ToArray();
 
             timer.Stop();
             Console.WriteLine(String.Format("done in {0:0.0}s\n\tLoaded {1} glycans, {2} glycan boxes", timer.ElapsedMilliseconds * 0.001, GlycanBox.GlobalOGlycans.Length, GlycanBox.OGlycanBoxes.Length));
