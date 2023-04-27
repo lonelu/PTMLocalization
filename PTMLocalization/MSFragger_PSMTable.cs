@@ -75,6 +75,21 @@ namespace PTMLocalization
             return -1;
         }
 
+        public double GetMaxDeltaMass()
+        {
+            double max = 0;
+            foreach (string PSMline in PSMdata)
+            {
+                string deltaStr = PSMline.Split("\t")[DeltaMassCol];
+                double mass = Double.Parse(deltaStr);
+                if (mass > max)
+                {
+                    max = mass;
+                }
+            }
+            return max;
+        }
+
         /**
          * Generate a dictionary of scan num: PSM string for a given rawfile
          */

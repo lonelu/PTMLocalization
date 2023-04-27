@@ -31,6 +31,7 @@ namespace PTMLocalization
         private bool filterOxonium;
         private double oxoMinRelativeIntensity;
         private int numThreads;
+        private MSFragger_PSMTable PSMtable;
 
         private Dictionary<string, string> lcmsPaths;
 
@@ -66,13 +67,16 @@ namespace PTMLocalization
             oxoMinRelativeIntensity = _oxoMinRelativeIntensity;
             numThreads = _numThreads;
 
-            Setup();
+            // Initial Setup
+            PSMtable = new(psmFile);
+            double maxGlycanMass = PSMtable.GetMaxDeltaMass() + isotopes.Max() * AveragineIsotopeMass + 0.1;     // max delta mass plus isotope error and a fudge factor for precursor tolerance
+            LoadGlycanDatabase(maxGlycanMass);
         }
 
         /**
          * Load glycan database and initialize glycan boxes given database and max number of O-glycans per peptide provided for the search.
          */
-        public void Setup()
+        public void LoadGlycanDatabase(double maxGlycanMass)
         {
             System.Diagnostics.Stopwatch timer = new();
             Console.Write("Loading Glycan Database...");
@@ -293,9 +297,6 @@ namespace PTMLocalization
                 }
                 usingLcmsFilePath = true;
             }
-
-            // read PSM table to prepare to pass scans to localizer
-            MSFragger_PSMTable PSMtable = new(psmFile);
 
             bool overwritePrevious = false;
             if (PSMtable.Headers.Contains("O-Pair Score"))
