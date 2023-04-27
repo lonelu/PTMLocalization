@@ -25,7 +25,7 @@ namespace EngineLayer
                 {
                     string line = lines.ReadLine();
                     // skip headers
-                    if (line.StartsWith("#") || line.StartsWith("//") || line.StartsWith("%") || line.StartsWith("Glycan"))
+                    if (line.StartsWith("#") || line.StartsWith("//") || line.StartsWith("%") || line.StartsWith("Glycan") || line.Contains(','))
                     {
                         line = lines.ReadLine();
                     }
@@ -177,6 +177,10 @@ namespace EngineLayer
                 while (glycans.Peek() != -1)
                 {
                     string line = glycans.ReadLine();
+                    if (line.Contains(','))
+                    {
+                        continue;
+                    }
                     yield return Glycan.Struct2Glycan(line, id++, ToGenerateIons, IsOGlycan);
                 }
             }
