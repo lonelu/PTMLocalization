@@ -196,7 +196,7 @@ namespace EngineLayer.GlycoSearch
 
                 //sb.Append(glycanBox.Mass + "\t");
 
-                sb.Append(Glycan.GetKindString(glycanBox.Kind)); sb.Append("\t");
+                sb.Append(Glycan.GetFragpipeGlycan(glycanBox.Kind)); sb.Append("\t");
 
                 //Get glycans
                 var glycans = GetFirstGraphGlycans(this, glycanBox);

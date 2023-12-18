@@ -503,6 +503,16 @@ namespace EngineLayer
             return kindString.ToString();
         }
 
+        public static string GetFragpipeGlycan(byte[] Kind)
+        {
+            StringBuilder fragpipeGlycan = new StringBuilder();
+            for (int i = 0; i < SugarLength; i++)
+            {
+                fragpipeGlycan.Append(Kind[i] == 0 ? "" : GlobalVariables.Monosaccharides[i].Name + string.Format("({0})", Kind[i].ToString()));
+            }
+            return fragpipeGlycan.ToString();
+        }
+
         // subtract a Kind (composition) from another
         public static byte[] subtractKind(byte[] mainKind, byte[] subtractKind)
         {
