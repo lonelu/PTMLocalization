@@ -238,71 +238,46 @@ namespace PTMLocalization
 
                 // add new assigned modification for each O-Pair mod
                 double opairGlycanMass = 0;
-                bool hasUnlocalizedGlycs = false;
-                byte[] unlocalizedGlycanComp = gsm.getTotalKind();
+                GlycanBox testBox = GlycoSpectralMatch.GetFirstGraphGlycanBox(gsm);
+                Dictionary<int, List<GlycoSite>> glycansByID = gsm.GetGlycoSitesByGlycanID();
                 List<int> assignedGlycPositions = new();
-                foreach (var localizedGlyc in gsm.LocalizedGlycan)
+                // each glycan is listed by ID (with no duplicates) in the glycanBox, so use that to assign positions
+                foreach (int glycID in testBox.ModIds)
                 {
-                    if (localizedGlyc.IsLocalized)
+                    var sites = glycansByID[glycID];
+                    int siteIndex = 0;
+                    int minSite = 10000;
+                    for (int i=0; i < sites.Count; i++)
                     {
-                        unlocalizedGlycanComp = Glycan.subtractKind(unlocalizedGlycanComp, globalGlycans[localizedGlyc.GlycanID].Kind);     // keep track of what glycan(s) are left unlocalized
-
-                        double mass = EngineLayer.GlycanBox.GlobalOGlycans[localizedGlyc.GlycanID].Mass * 0.00001;    // mass is saved as int * 10e5 in GlycanBox
-                        opairGlycanMass += mass;
-                        var peptide_site = localizedGlyc.ModSite - 1;
-                        string aa = peptide.Substring(peptide_site - 1, 1);
-                        var comp = EngineLayer.GlycanBox.GlobalOGlycans[localizedGlyc.GlycanID].Composition;
-                        newAssignedMods.Add(string.Format("{0}{1}({2:0.0000})", peptide_site, aa, mass));
-                        assignedGlycPositions.Add(peptide_site - 1);
-
-                        // edit modified peptide col
-                        existingPSMline = EditModifiedPeptide(existingPSMline, peptide, mass, peptide_site, aa);
-                    }
-                    else
-                    {
-                        // level 3 or otherwise unlocalized glycan. NOTE: there may be multiple entries for each possible equivalent site, so do not read the mass here as it may not be correct
-                        hasUnlocalizedGlycs = true;
-                    }
-                }
-                // if fewer glycosites than glycans (e.g., N-glycan/other glycan present), may have remaining localized glycans: check for them
-                foreach (byte b in unlocalizedGlycanComp)
-                {
-                    if (b > 0)
-                    {
-                        hasUnlocalizedGlycs = true;
-                        break;
-                    }
-                }
-                // handle unlocalized glycan(s) writing to assigned mods
-                if (hasUnlocalizedGlycs)
-                {
-                    // at least one unlocalized glycan present. Determine total unlocalized mass
-                    double unlocMass = Glycan.GetMass(unlocalizedGlycanComp) * 0.00001;
-                    opairGlycanMass += unlocMass;
-                    // find first available site
-                    int firstAvailable = -1;
-                    for (int i = 0; i < peptide.Length; i++)
-                    {
-                        if (peptide[i] == 'S' || peptide[i] == 'T')
+                        if (sites[i].IsLocalized)
                         {
-                            if (!assignedGlycPositions.Contains(i))
+                            // localized sites are always assigned, no need to look for lower number. Assign and stop the loop
+                            siteIndex = i;
+                            break;
+                        } 
+                        else
+                        {
+                            // find the first possible unlocalized site
+                            if (sites[i].ModSite < minSite)
                             {
-                                // found available position. Place here and stop
-                                firstAvailable = i;
-                                break;
+                                siteIndex = i;
+                                minSite = sites[i].ModSite;
                             }
                         }
                     }
-                    if (firstAvailable == -1)
-                    {
-                        // no unoccupied sites. Can happen, especially if there is an N-glycan on the peptide too. Place on first occupied site.
-                        firstAvailable = assignedGlycPositions[0];
-                    }
-                    // add total unlocalized mass as an assigned mod
-                    string aa = peptide.Substring(firstAvailable, 1);
-                    newAssignedMods.Add(string.Format("{0}{1}({2:0.0000})", firstAvailable + 1, aa, unlocMass));
-                    // also add to modified peptide
-                    existingPSMline = EditModifiedPeptide(existingPSMline, peptide, unlocMass, firstAvailable + 1, aa);
+                    // assign the site and remove it from the sites list
+                    double mass = GlycanBox.GlobalOGlycans[glycID].Mass * 0.00001;    // mass is saved as int * 10e5 in GlycanBox
+                    opairGlycanMass += mass;
+                    var peptide_site = sites[siteIndex].ModSite - 1;
+                    string aa = peptide.Substring(peptide_site - 1, 1);
+                    var comp = GlycanBox.GlobalOGlycans[glycID].Composition;
+                    newAssignedMods.Add(string.Format("{0}{1}({2:0.0000})", peptide_site, aa, mass));
+                    assignedGlycPositions.Add(peptide_site - 1);
+
+                    // edit modified peptide col
+                    existingPSMline = EditModifiedPeptide(existingPSMline, peptide, mass, peptide_site, aa);
+
+                    sites.Remove(sites[siteIndex]);
                 }
 
                 // write final mods back to assigned mods column

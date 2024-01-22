@@ -173,6 +173,23 @@ namespace EngineLayer.GlycoSearch
             return local;
         }
 
+        public Dictionary<int, List<GlycoSite>> GetGlycoSitesByGlycanID()
+        {
+            Dictionary<int, List<GlycoSite>> idDict = new();
+            foreach (GlycoSite site in LocalizedGlycan)
+            {
+                if (idDict.ContainsKey(site.GlycanID))
+                {
+                    idDict[site.GlycanID].Add(site);
+                } 
+                else
+                {
+                    idDict[site.GlycanID] = new List<GlycoSite> {site};
+                }
+            }
+            return idDict;
+        }
+
         #endregion
 
         public byte[] getTotalKind()
