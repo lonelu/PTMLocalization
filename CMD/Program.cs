@@ -63,8 +63,7 @@ namespace CMD
                 }
             }
 
-            // todo: add option for specifying monosaccharides.tsv (to replace the initial "null" here)
-            GlobalVariables.SetUpGlobalVariables(null, settings.oxoFilter);
+            GlobalVariables.SetUpGlobalVariables(settings.glycanResiduesFile, settings.oxoFilter);
 
             if (settings.oxoMinInt < 0 || settings.oxoMinInt > 1)
             {
@@ -166,6 +165,25 @@ namespace CMD
             if (settings.glycoDatabase != null)
             {
                 settings.glycoDatabase = settings.glycoDatabase.Trim();
+                if (!File.Exists (settings.glycoDatabase))
+                {
+                    Console.WriteLine("Error: glycan database file not found at {0}, please check the file and retry", settings.glycoDatabase);
+                    return false;
+                }
+            }
+
+            // glycan residues file
+            if (settings.glycanResiduesFile != null)
+            {
+                if (settings.glycanResiduesFile.Length > 0)
+                {
+                    settings.glycanResiduesFile.Trim();
+                    if (!File.Exists(settings.glycanResiduesFile))
+                    {
+                        Console.WriteLine("Error: glycan residues file not found at {0}, please check the file and retry", settings.glycanResiduesFile);
+                        return false;
+                    }
+                }
             }
 
             // oxonium filter setup and check

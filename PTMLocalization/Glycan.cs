@@ -26,9 +26,11 @@ namespace EngineLayer
         public static Monosaccharide[] LoadMonosaccharide(string filePath)
         {
             List<Monosaccharide> sugars = new List<Monosaccharide>();
+            byte monoCounter = 0;
             using (StreamReader lines = new StreamReader(filePath))
             {
                 bool firstLine = true;
+                bool isMMfile = false;
                 while (lines.Peek() != -1)
                 {
                     string line = lines.ReadLine();
@@ -37,12 +39,65 @@ namespace EngineLayer
                     {
                         //Skip the first line
                         firstLine = false;
+                        if (line.StartsWith("Id"))
+                        {
+                            isMMfile = true;
+                        }
                         continue;
                     }
 
                     var xs = line.Split('\t');
+                    Monosaccharide mono;
+                    if (isMMfile)
+                    {
+                         mono = new Monosaccharide(byte.Parse(xs[0].Trim()), xs[1].Trim(), char.Parse(xs[2].Trim()), int.Parse(xs[3].Trim()));
+                    } 
+                    else
+                    {
+                        // FragPipe file
+                        string name = xs[0].Trim();
+                        char symbol;
+                        if (GlobalVariables.fragpipeGlycsToSymbols.ContainsKey(name))
+                        {
+                            symbol = GlobalVariables.fragpipeGlycsToSymbols[name];
+                        } 
+                        else
+                        {
+                            symbol = 'A';
+                            bool loopedAround = false;
+                            char trySymbol = name[0];
+                            while (trySymbol <= 'Z')
+                            {
+                                if (!GlobalVariables.usedSymbols.Contains(trySymbol))
+                                {
+                                    symbol = trySymbol;
+                                    GlobalVariables.usedSymbols.Add(trySymbol);
+                                    break;
+                                }
+                                if (trySymbol == 'Z')
+                                {
+                                    if (loopedAround)
+                                    {
+                                        // could not find an available char! 26 symbols already assigned.
+                                        Console.WriteLine("Error: More than 26 glycan residues provided, not all could be assigned to symbols. Please specify fewer residues and try again.");
+                                        throw new ArgumentOutOfRangeException("Too many glycan residues");
+                                    }
+                                    else
+                                    {
+                                        trySymbol = 'A';
+                                        loopedAround = true;
+                                    }
+                                } 
+                                else
+                                {
+                                    trySymbol = (char)(trySymbol + 1);
+                                }
+                            }
+                        }
 
-                    Monosaccharide mono = new Monosaccharide(byte.Parse(xs[0].Trim()), xs[1].Trim(), char.Parse(xs[2].Trim()), int.Parse(xs[3].Trim()));
+                        mono = new Monosaccharide(monoCounter, name, symbol, (int) (double.Parse(xs[3].Trim()) * 10000));
+                        monoCounter++;
+                    }
                     sugars.Add(mono);
                 }
             }

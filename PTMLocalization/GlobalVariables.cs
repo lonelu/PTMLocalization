@@ -17,6 +17,24 @@ namespace EngineLayer
 {
     public static class GlobalVariables
     {
+        // tranlsations for default FragPipe monosaccharides names
+        public static Dictionary<string, char> fragpipeGlycsToSymbols = new Dictionary<string, char>
+        {
+            { "HexNAc", 'N' },
+            { "Hex", 'H' },
+            { "Fuc", 'F' },
+            { "NeuAc", 'A' },
+            { "NeuGc", 'G' },
+            { "Phospho", 'P' },
+            { "Sulfo", 'S' },
+            { "Na", 'Y' },
+            { "Acetyl", 'C' },
+            { "Xylose", 'X' },
+            { "Succinyl", 'U' },
+            { "Formyl", 'M' },
+        };
+
+
         public static string DataDir { get; private set; }
 
         public static Monosaccharide[] Monosaccharides { get; private set; }
@@ -27,12 +45,16 @@ namespace EngineLayer
 
         public static List<FilterRule> OxoniumFilters {get; private set; }
 
+        public static HashSet<char> usedSymbols { get; private set; }
+
         public static void SetUpGlobalVariables(string? monosaccharidePath, string? oxoniumPath)
         {
             Loaders.LoadElements();
 
             SetUpDataDirectory();
 
+            usedSymbols = new HashSet<char>();
+            usedSymbols.AddRange(fragpipeGlycsToSymbols.Values);
             LoadGlycans(monosaccharidePath, oxoniumPath);
         }
 

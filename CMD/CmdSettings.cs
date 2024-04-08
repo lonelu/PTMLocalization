@@ -23,6 +23,9 @@ namespace CMD
         [Option('g', Default = "OGlycan.gdb", HelpText = "[Optional] glycoDatabase ")]
         public string glycoDatabase { get; set; }
 
+        [Option('z', Default = "", HelpText = "[Optional] glycanResiduesDatabase ")]
+        public string glycanResiduesFile { get; set; }
+
         [Option('n', Default = 3, HelpText = "[Optional] maxNumGlycans ")]
         public int maxNumGlycans { get; set; }
 
@@ -65,6 +68,7 @@ namespace CMD
             x += " -c " + precursorPpmTol.ToString();
 
             x += " -g " + glycoDatabase;
+            x += " -z " + glycanResiduesFile;
             x += " -n " + maxNumGlycans.ToString();
             x += " -i " + minIsotopeError.ToString(); 
             x += " -j " + maxIsotopeError.ToString();
