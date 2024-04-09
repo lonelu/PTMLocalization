@@ -23,10 +23,9 @@ namespace EngineLayer
         public char Symbol { get; }
         public int Mass { get; }
 
-        public static Monosaccharide[] LoadMonosaccharide(string filePath)
+        public static List<Monosaccharide> LoadMonosaccharide(string filePath, byte monoCounter)
         {
             List<Monosaccharide> sugars = new List<Monosaccharide>();
-            byte monoCounter = 0;
             using (StreamReader lines = new StreamReader(filePath))
             {
                 bool firstLine = true;
@@ -63,46 +62,67 @@ namespace EngineLayer
                         } 
                         else
                         {
-                            symbol = 'A';
-                            bool loopedAround = false;
-                            char trySymbol = name[0];
-                            while (trySymbol <= 'Z')
-                            {
-                                if (!GlobalVariables.usedSymbols.Contains(trySymbol))
-                                {
-                                    symbol = trySymbol;
-                                    GlobalVariables.usedSymbols.Add(trySymbol);
-                                    break;
-                                }
-                                if (trySymbol == 'Z')
-                                {
-                                    if (loopedAround)
-                                    {
-                                        // could not find an available char! 26 symbols already assigned.
-                                        Console.WriteLine("Error: More than 26 glycan residues provided, not all could be assigned to symbols. Please specify fewer residues and try again.");
-                                        throw new ArgumentOutOfRangeException("Too many glycan residues");
-                                    }
-                                    else
-                                    {
-                                        trySymbol = 'A';
-                                        loopedAround = true;
-                                    }
-                                } 
-                                else
-                                {
-                                    trySymbol = (char)(trySymbol + 1);
-                                }
-                            }
+                            symbol = getSymbol(name);
                         }
 
-                        mono = new Monosaccharide(monoCounter, name, symbol, (int) (double.Parse(xs[3].Trim()) * 10000));
+                        mono = new Monosaccharide(monoCounter, name, symbol, (int) (double.Parse(xs[1].Trim()) * 10000));
                         monoCounter++;
                     }
                     sugars.Add(mono);
                 }
             }
          
-            return sugars.ToArray();
+            return sugars;
+        }
+
+        /**
+         * Try to assign a glycan symbol automatically. Uses default mapping first, or first letter of the glycan if it is not 
+         * in the default mapping, or the next letter (alphabetically) if that one is taken until one is found. After all capitals,
+         * moves to lower case. 
+         * Max 52 symbols, otherwise it fails. 
+         */
+        private static char getSymbol(string name)
+        {
+            char symbol = 'A';
+            bool loopedUpper = false;
+            bool loopedBoth = false;
+            char trySymbol = name.ToUpper()[0];
+            while (trySymbol <= 'Z')
+            {
+                if (!GlobalVariables.usedSymbols.Contains(trySymbol))
+                {
+                    symbol = trySymbol;
+                    GlobalVariables.usedSymbols.Add(trySymbol);
+                    return symbol;
+                }
+                if (trySymbol == 'Z')
+                {
+                    if (loopedBoth)
+                    {
+                        // could not find an available char! 52 symbols already assigned.
+                        Console.WriteLine("Error: More than 52 glycan residues provided, not all could be assigned to symbols. Please specify fewer residues and try again.");
+                        throw new ArgumentOutOfRangeException("Too many glycan residues");
+                    }
+                    else
+                    {
+                        if (loopedUpper)
+                        {
+                            trySymbol = 'A';
+                            loopedUpper = true;
+                        } 
+                        else
+                        {
+                            trySymbol = 'a';
+                            loopedBoth = true;
+                        }
+                    }
+                }
+                else
+                {
+                    trySymbol = (char)(trySymbol + 1);
+                }
+            }
+            return symbol;
         }
         public static Dictionary<char, int> GetCharMassDic(Monosaccharide[] monosaccharides)
         {

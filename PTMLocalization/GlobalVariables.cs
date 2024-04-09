@@ -1,16 +1,7 @@
-﻿using Chemistry;
-using Easy.Common.Extensions;
-using MassSpectrometry;
-using Proteomics;
-using Proteomics.AminoAcidPolymer;
-using Proteomics.ProteolyticDigestion;
+﻿using Easy.Common.Extensions;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
-using System.Linq;
-using System.Runtime.InteropServices;
-using System.Text;
 using UsefulProteomicsDatabases;
 
 namespace EngineLayer
@@ -47,7 +38,7 @@ namespace EngineLayer
 
         public static HashSet<char> usedSymbols { get; private set; }
 
-        public static void SetUpGlobalVariables(string? monosaccharidePath, string? oxoniumPath)
+        public static void SetUpGlobalVariables(string? monosaccharidePath, string? oxoniumPath, string? additionalMonosaccharidePath)
         {
             Loaders.LoadElements();
 
@@ -55,7 +46,7 @@ namespace EngineLayer
 
             usedSymbols = new HashSet<char>();
             usedSymbols.AddRange(fragpipeGlycsToSymbols.Values);
-            LoadGlycans(monosaccharidePath, oxoniumPath);
+            LoadGlycans(monosaccharidePath, oxoniumPath, additionalMonosaccharidePath);
         }
 
         private static void SetUpDataDirectory()
@@ -74,10 +65,17 @@ namespace EngineLayer
 
         }
 
-        private static void LoadGlycans(string? monosaccharidePath, string? oxoniumPath)
+        private static void LoadGlycans(string? monosaccharidePath, string? oxoniumPath, string? additionalMonosaccharidePath)
         {
             monosaccharidePath ??= Path.Combine(DataDir, @"Glycan_Mods", @"Monosaccharide.tsv");    // use default if not provided
-            Monosaccharides = Monosaccharide.LoadMonosaccharide(monosaccharidePath);
+            List<Monosaccharide> residues = Monosaccharide.LoadMonosaccharide(monosaccharidePath, 0);
+            if (additionalMonosaccharidePath != null)
+            {
+                // load mods from fragpipe if specified
+                residues.AddRange(Monosaccharide.LoadMonosaccharide(additionalMonosaccharidePath, (byte)residues.Count));
+            }
+            Monosaccharides = residues.ToArray();
+            printResidueSettings(Monosaccharides);
 
             oxoniumPath ??= Path.Combine(DataDir, @"Glycan_Mods", @"OxoniumFilter.tsv");            // use default if not provided
             OxoniumFilters = FilterRule.LoadOxoniumFilters(oxoniumPath);
@@ -93,6 +91,15 @@ namespace EngineLayer
             foreach (var glycanFile in Directory.GetFiles(Path.Combine(DataDir, @"Glycan_Mods", @"NGlycan")))
             {
                 NGlycanLocations.Add(glycanFile);
+            }
+        }
+
+        public static void printResidueSettings(Monosaccharide[] monosaccharides)
+        {
+            Console.WriteLine("Using residue definitions:");
+            foreach (Monosaccharide mono in monosaccharides)
+            {
+                Console.WriteLine($"\t{mono.Id}: {mono.Name} = {mono.Mass * 0.0001:F4}");
             }
         }
 

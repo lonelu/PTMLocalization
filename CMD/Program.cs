@@ -63,7 +63,7 @@ namespace CMD
                 }
             }
 
-            GlobalVariables.SetUpGlobalVariables(settings.glycanResiduesFile, settings.oxoFilter);
+            GlobalVariables.SetUpGlobalVariables(settings.glycanResiduesFile, settings.oxoFilter, settings.glycanModsFile);
 
             if (settings.oxoMinInt < 0 || settings.oxoMinInt > 1)
             {
@@ -183,6 +183,28 @@ namespace CMD
                         Console.WriteLine("Error: glycan residues file not found at {0}, please check the file and retry", settings.glycanResiduesFile);
                         return false;
                     }
+                } 
+                else
+                {
+                    settings.glycanResiduesFile = null;
+                }
+            }
+
+            // glycan mods file
+            if (settings.glycanModsFile != null)
+            {
+                if (settings.glycanModsFile.Length > 0)
+                {
+                    settings.glycanModsFile.Trim();
+                    if (!File.Exists(settings.glycanModsFile))
+                    {
+                        Console.WriteLine("Error: glycan mods file not found at {0}, please check the file and retry", settings.glycanModsFile);
+                        return false;
+                    }
+                }
+                else
+                {
+                    settings.glycanModsFile = null;
                 }
             }
 
